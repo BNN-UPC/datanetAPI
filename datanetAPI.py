@@ -165,6 +165,13 @@ class Sample:
 
         """
         return self.topology_matrix[src, dst]
+    
+    def get_network_size(self):
+        """
+        Returns the number of nodes of the topology.
+        """
+        return len(self.topology_matrix)
+        
         
     def _set_result_matrix(self, m):
         """
@@ -348,9 +355,10 @@ class ParsingTool:
             src += 1
         return (R)
 
-    def _getSrcPortDst(self, G):
+    def _getRoutingSrcPortDst(self, G):
         """
-        Pending to compare against readRoutingFile
+        Return a dictionary of dictionaries with the format:
+        node_port_dst[node][port] = next_node
 
         Parameters
         ----------
@@ -372,7 +380,7 @@ class ParsingTool:
                 node_port_dst[node][port] = destination
         return(node_port_dst)
 
-    def _getAllPaths(self, G,routing_file):
+    def _create_routing_matrix(self, G,routing_file):
         """
 
         Parameters
@@ -391,7 +399,7 @@ class ParsingTool:
         """
         
         netSize = G.number_of_nodes()
-        node_port_dst = self._getSrcPortDst(G)
+        node_port_dst = self._getRoutingSrcPortDst(G)
         R = self._readRoutingFile(routing_file, netSize)
         MatrixPath = numpy.empty((netSize, netSize), dtype=object)
         for src in range (0,netSize):
@@ -403,7 +411,7 @@ class ParsingTool:
                     next_node = node_port_dst[node][out_port]
                     path.append(next_node)
                     node = next_node
-                MatrixPath[src][dst] = path[0:len(path)]
+                MatrixPath[src][dst] = path
         return (MatrixPath)
 
     def _get_graph_for_tarfile(self, tar):
@@ -548,8 +556,7 @@ class ParsingTool:
                         traffic_file = tar.extractfile(dir_info.name+"/traffic.txt")
                         flowresults_file = tar.extractfile(dir_info.name+"/flowSimulationResults.txt")
                         
-                        routing_matrix_for_tar = numpy.empty((g.number_of_nodes(), g.number_of_nodes()), dtype=object)
-                        routing_matrix_for_tar = self._getAllPaths(g, routing_file)
+                        routing_matrix= self._create_routing_matrix(g, routing_file)
                         while(True):
                             s = Sample()
                             results_line = results_file.readline()
@@ -567,7 +574,7 @@ class ParsingTool:
                                     continue
                                 
                             self._process_flow_results_traffic_line(results_line, traffic_line, flowresults_line, s)
-                            s._set_routing_matrix(routing_matrix_for_tar)
+                            s._set_routing_matrix(routing_matrix)
                             s._set_topology_matrix(topology_matrix_for_dataset)
                             yield s
                     else:
@@ -701,7 +708,7 @@ class ParsingTool:
             temp['TimeDist'] = 'DETERMINISTIC_T'
             params = {}
             params['EqLambda'] = data[1]
-            params['AvgPktsLambda'] = data[2]
+            params['PktsLambda'] = data[2]
             temp['TimeDistParams'] = params
             return [temp, 3]
         elif data[0] == 2:
@@ -771,7 +778,7 @@ class ParsingTool:
         if data[starting_point] == 0:
             ret['SizeDist'] = 'DETERMINISTIC_S'
             params = {}
-            params['AvgPktSize'] = data[starting_point+1]
+            params['PktSize'] = data[starting_point+1]
             ret['SizeDistParams'] = params
         elif data[starting_point] == 1:
             ret['SizeDist'] = 'UNIFORM_S'

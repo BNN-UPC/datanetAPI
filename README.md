@@ -60,7 +60,8 @@ As for traffic_matrix, more explanation is also needed. It is structured as foll
   * TimeDis: time distribution used by the flow. 
   * TimeDistParams: dictionary with the parameters of the specific time distribution. 
     * EqLambda: average bits per second to generate. 
-    * AvgPktsLambda: average number of packets of average size generated per time unit.  
+    * AvgPktsLambda: average number of packets of average size generated per time unit.
+    * PktsLambda: Number of packets average size generated per time unit.
     * MinPktLambda: minimum number of packets of average size generated per time unit. 
     * MaxPktLambda: maximum number of packets of average size generated per time unit. 
     * StdDev: Standard deviation of the normal of the interarrival time. 
@@ -74,7 +75,8 @@ As for traffic_matrix, more explanation is also needed. It is structured as foll
     * ParetoMaxSize: Maximum number of bits in the burst. 
     * ParetoAlfa: Tail index.
   * SizeDist: size distribution used by the flow. 
-  * SizeDistParams: dictionary with the parameters of the specific size distribution. 
+  * SizeDistParams: dictionary with the parameters of the specific size distribution.
+    * PktSize: Size of the packets in bits.
     * AvgPktSize: Average size of the packets in bits.
     * MinSize: Minimum size of the packets in bits. 
     * MaxSize: Maximum size of the packets in bits. 
@@ -94,14 +96,14 @@ The topology_matrix accessing process is equivalent to the previous one. Assumin
 
 ## 3.1 Parameters of time distributions
 * Exponential: EqLambda, AvgPktsLambda, ExpMaxFactor 
-* Deterministic: EqLambda, AvgPktsLambda 
+* Deterministic: EqLambda, PktsLambda 
 * Uniform: EqLambda, MinPktLambda, MaxPktLambda 
 * Normal: EqLambda, AvgPktsLambda, StdDev 
-* OnOff: EqLambda, PktsLambdaOn, AvgTOff, AvgTOn 
+* OnOff: EqLambda, PktsLambdaOn, AvgTOff, AvgTOn, ExpMaxFactor
 * PPBP: EqLambda, BurstGenLambda, Bitrate, ParetoMinSize, ParetoMazSize, ParetoAlfa, ExpMaxFactor
 
 ## 3.2 Parematers of size distributions
-* Deterministic: AvgPktSize 
+* Deterministic: PktSize 
 * Uniform: AvgPktSize, MinSize, MaxSize 
 * Binomial: AvgPktSize, PktSize1, PktSize2 
 * Generic: AvgPktSize, NumCandidates, Size_i, Prob_i
@@ -118,4 +120,5 @@ The sample object offers methods to obtain the matrices resulting of each iterat
 * s.get_srcdst_routing(src,dst): Returns a string with the routing path between the src and dst node. 
 * s.get_topology_matrix(): Returns a matrix m such that m[src,dst] returns the information that the Topology matrix stores for the requested [src,dst] pair, that is, the bandwidth between both nodes if they are adjacent, or -1 otherwise. 
 * s.get_srcdst_topology(src,dst): Returns  the bandwidth between both nodes if they are adjacent, or -1 otherwise.
+* s.get_network_size: Return the number of nodes of the topology.
 
