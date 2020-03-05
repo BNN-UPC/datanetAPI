@@ -76,7 +76,6 @@ As for traffic_matrix, more explanation is also needed. It is structured as foll
     * ParetoAlfa: Tail index.
   * SizeDist: size distribution used by the flow. 
   * SizeDistParams: dictionary with the parameters of the specific size distribution.
-    * PktSize: Size of the packets in bits.
     * AvgPktSize: Average size of the packets in bits.
     * MinSize: Minimum size of the packets in bits. 
     * MaxSize: Maximum size of the packets in bits. 
@@ -100,10 +99,10 @@ The topology_matrix accessing process is equivalent to the previous one. Assumin
 * TimeDist.UNIFORM_T: EqLambda, MinPktLambda, MaxPktLambda 
 * TimeDist.NORMAL_T: EqLambda, AvgPktsLambda, StdDev 
 * TimeDist.ONOFF_T: EqLambda, PktsLambdaOn, AvgTOff, AvgTOn, ExpMaxFactor
-* TimeDist.PPBP_T: EqLambda, BurstGenLambda, Bitrate, ParetoMinSize, ParetoMazSize, ParetoAlfa, ExpMaxFactor
+* TimeDist.PPBP_T: EqLambda, BurstGenLambda, Bitrate, ParetoMinSize, ParetoMaxSize, ParetoAlfa, ExpMaxFactor
 
 ## 3.2 Parematers of size distributions
-* SizeDist.DETERMINISTIC_S: PktSize 
+* SizeDist.DETERMINISTIC_S: AvgPktSize 
 * SizeDist.UNIFORM_S: AvgPktSize, MinSize, MaxSize 
 * SizeDist.BINOMIAL_S: AvgPktSize, PktSize1, PktSize2 
 * SizeDist.GENERIC_S: AvgPktSize, NumCandidates, Size_i, Prob_i

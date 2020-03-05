@@ -605,14 +605,21 @@ class ParsingTool:
                         routing_file = tar.extractfile(dir_info.name+"/Routing.txt")
                         results_file = tar.extractfile(dir_info.name+"/simulationResults.txt")
                         traffic_file = tar.extractfile(dir_info.name+"/traffic.txt")
-                        flowresults_file = tar.extractfile(dir_info.name+"/flowSimulationResults.txt")
+                        if ("flowSimulationResults.txt" in tar.getnames()):
+                            flowresults_file = tar.extractfile(dir_info.name+"/flowSimulationResults.txt")
+                        else:
+                            flowresults_file = None
+                        
                         
                         routing_matrix= self._create_routing_matrix(g, routing_file)
                         while(True):
                             s = Sample()
                             results_line = results_file.readline()
                             traffic_line = traffic_file.readline()
-                            flowresults_line = flowresults_file.readline()
+                            if (flowresults_file):
+                                flowresults_line = flowresults_file.readline()
+                            else:
+                                flowresults_line = None
                             if (len(results_line) == 0) or (len(traffic_line) == 0):
                                 break
                             if (feasibility_of_file == 1):
@@ -663,9 +670,12 @@ class ParsingTool:
         s._set_delay_network(first_params[2])
         r = r.split('|')[1].split(';')
         
-        f = str(fline)
-        f = f[2:len(f)-4]
-        f = f.split(';')
+        if (fline):
+            f = str(fline)
+            f = f[2:len(f)-4]
+            f = f.split(';')
+        else:
+            f = r
         
         t  = str(tline)
         t = t[2:len(t)-4]
@@ -789,7 +799,7 @@ class ParsingTool:
             temp['TimeDistParams'] = params
             return [temp, 6]
         elif data[0] == 5:
-            temp['TimeDist'] = 'PPBP_T'
+            temp['TimeDist'] = TimeDist.PPBP_T
             params = {}
             params['EqLambda'] = data[1]
             params['BurstGenLambda'] = data[2]
@@ -829,7 +839,7 @@ class ParsingTool:
         if data[starting_point] == 0:
             ret['SizeDist'] = SizeDist.DETERMINISTIC_S
             params = {}
-            params['PktSize'] = data[starting_point+1]
+            params['AvgPktSize'] = data[starting_point+1]
             ret['SizeDistParams'] = params
         elif data[starting_point] == 1:
             ret['SizeDist'] = SizeDist.UNIFORM_S
@@ -842,19 +852,17 @@ class ParsingTool:
             ret['SizeDist'] = SizeDist.BINOMIAL_S
             params = {}
             params['AvgPktSize'] = data[starting_point+1]
-            params['PktSize1'] = data[starting_point+1]
-            params['PktSize2'] = data[starting_point+1]
+            params['PktSize1'] = data[starting_point+2]
+            params['PktSize2'] = data[starting_point+3]
             ret['SizeDistParams'] = params
         elif data[starting_point] == 3:
-            ret['SizeDist'] = 'GENERIC_S'
+            ret['SizeDist'] = SizeDist.GENERIC_S
             params = {}
             params['AvgPktSize'] = data[starting_point+1]
             params['NumCandidates'] = data[starting_point+2]
-            candSizeProb = {}
-            for i in range(0, data[starting_point+2] * 2, 2):
-                candSizeProb["Size_%d"%(i/2)] = data[starting_point+3+i]
-                candSizeProb["Prob_%d"%(i/2)] = data[starting_point+4+i]
-            params['PairsSizeProb'] = candSizeProb
+            for i in range(0, int(data[starting_point+2]) * 2, 2):
+                params["Size_%d"%(i/2)] = data[starting_point+3+i]
+                params["Prob_%d"%(i/2)] = data[starting_point+4+i]
             ret['SizeDistParams'] = params
         return ret
 
