@@ -19,6 +19,57 @@
 # -*- coding: utf-8 -*-
 
 import os, tarfile, pathlib, numpy, math, networkx, queue
+from enum import IntEnum
+
+class TimeDist(IntEnum):
+    """
+    Enumeration of the supported time distributions 
+    """
+    EXPONENTIAL_T = 0
+    DETERMINISTIC_T = 1
+    UNIFORM_T = 2
+    NORMAL_T = 3
+    ONOFF_T = 4
+    PPBP_T = 5
+    
+    @staticmethod
+    def getStrig(timeDist):
+        if (timeDist == 0):
+            return ("EXPONENTIAL_T")
+        elif (timeDist == 1):
+            return ("DETERMINISTIC_T")
+        elif (timeDist == 2):
+            return ("UNIFORM_T")
+        elif (timeDist == 3):
+            return ("NORMAL_T")
+        elif (timeDist == 4):
+            return ("ONOFF_T")
+        elif (timeDist == 5):
+            return ("PPBP_T")
+        else:
+            return ("UNKNOWN")
+
+class SizeDist(IntEnum):
+    """
+    Enumeration of the supported size distributions 
+    """
+    DETERMINISTIC_S = 0
+    UNIFORM_S = 1
+    BINOMIAL_S = 2
+    GENERIC_S = 3
+    
+    @staticmethod
+    def getStrig(sizeDist):
+        if (sizeDist == 0):
+            return ("DETERMINISTIC_S")
+        elif (sizeDist == 1):
+            return ("UNIFORM_S")
+        elif (sizeDist == 2):
+            return ("BINOMIAL_S")
+        elif (sizeDist ==3):
+            return ("GENERIC_S")
+        else:
+            return ("UNKNOWN")
 
 class Sample:
     """
@@ -697,7 +748,7 @@ class ParsingTool:
         temp = {}
     #    print(data[0])
         if data[0] == 0: 
-            temp['TimeDist'] = 'EXPONENTIAL_T'
+            temp['TimeDist'] = TimeDist.EXPONENTIAL_T
             params = {}
             params['EqLambda'] = data[1]
             params['AvgPktsLambda'] = data[2]
@@ -705,14 +756,14 @@ class ParsingTool:
             temp['TimeDistParams'] = params
             return [temp, 4]
         elif data[0] == 1:
-            temp['TimeDist'] = 'DETERMINISTIC_T'
+            temp['TimeDist'] = TimeDist.DETERMINISTIC_T
             params = {}
             params['EqLambda'] = data[1]
             params['PktsLambda'] = data[2]
             temp['TimeDistParams'] = params
             return [temp, 3]
         elif data[0] == 2:
-            temp['TimeDist'] = 'UNIFORM_T'
+            temp['TimeDist'] = TimeDist.UNIFORM_T
             params = {}
             params['EqLambda'] = data[1]
             params['MinPktLambda'] = data[2]
@@ -720,7 +771,7 @@ class ParsingTool:
             temp['TimeDistParams'] = params
             return [temp, 4]
         elif data[0] == 3:
-            temp['TimeDist'] = 'NORMAL_T'
+            temp['TimeDist'] = TimeDist.NORMAL_T
             params = {}
             params['EqLambda'] = data[1]
             params['AvgPktsLambda'] = data[2]
@@ -728,7 +779,7 @@ class ParsingTool:
             temp['TimeDistParams'] = params
             return [temp, 4]
         elif data[0] == 4:
-            temp['TimeDist'] = 'ONOFF_T'
+            temp['TimeDist'] = TimeDist.ONOFF_T
             params = {}
             params['EqLambda'] = data[1]
             params['PktsLambdaOn'] = data[2]
@@ -776,19 +827,19 @@ class ParsingTool:
         """
         
         if data[starting_point] == 0:
-            ret['SizeDist'] = 'DETERMINISTIC_S'
+            ret['SizeDist'] = SizeDist.DETERMINISTIC_S
             params = {}
             params['PktSize'] = data[starting_point+1]
             ret['SizeDistParams'] = params
         elif data[starting_point] == 1:
-            ret['SizeDist'] = 'UNIFORM_S'
+            ret['SizeDist'] = SizeDist.UNIFORM_S
             params = {}
             params['AvgPktSize'] = data[starting_point+1]
             params['MinSize'] = data[starting_point+2]
             params['MaxSize'] = data[starting_point+3]
             ret['SizeDistParams'] = params
         elif data[starting_point] == 2:
-            ret['SizeDist'] = 'BINOMIAL_S'
+            ret['SizeDist'] = SizeDist.BINOMIAL_S
             params = {}
             params['AvgPktSize'] = data[starting_point+1]
             params['PktSize1'] = data[starting_point+1]

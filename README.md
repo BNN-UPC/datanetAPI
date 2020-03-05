@@ -54,9 +54,9 @@ Then, assuming r is the Result matrix of an arbitrary iteration, we could access
 As for traffic_matrix, more explanation is also needed. It is structured as follows: 
 
 * AggInfo: dictionary with the following aggregated information of all the flows between the specific [src,dst]: 
-  *  AvgBw: average banndwidth in Kbps of all the traffic from src node to dst node.
+  * AvgBw: average banndwidth in Kbps of all the traffic from src node to dst node.
   * PktsGen: packets generated from src node to dst node per time unit. 
-* Flows: List of dictionaries with flow-level size and time distribution information for each flow between node i and node j (See relation between list of parameters for each time and size distribution below). 
+* Flows: List of dictionaries with flow-level size and time distribution information for each flow between node i and node j (See supported size and time distribution types and its associated list of parameters in the section 3.1 and 3.2). 
   * TimeDis: time distribution used by the flow. 
   * TimeDistParams: dictionary with the parameters of the specific time distribution. 
     * EqLambda: average bits per second to generate. 
@@ -95,18 +95,18 @@ The routing_matrix accessing process is pretty much straightforward. Assuming ro
 The topology_matrix accessing process is equivalent to the previous one. Assuming topo is a topology_matrix, topo[src,dst] will return the bandwidth of the link that connects node src and node dst, if they are directly adjacent, or -1 if they are not. 
 
 ## 3.1 Parameters of time distributions
-* Exponential: EqLambda, AvgPktsLambda, ExpMaxFactor 
-* Deterministic: EqLambda, PktsLambda 
-* Uniform: EqLambda, MinPktLambda, MaxPktLambda 
-* Normal: EqLambda, AvgPktsLambda, StdDev 
-* OnOff: EqLambda, PktsLambdaOn, AvgTOff, AvgTOn, ExpMaxFactor
-* PPBP: EqLambda, BurstGenLambda, Bitrate, ParetoMinSize, ParetoMazSize, ParetoAlfa, ExpMaxFactor
+* TimeDist.EXPONENTIAL_T: EqLambda, AvgPktsLambda, ExpMaxFactor 
+* TimeDist.DETERMINISTIC_T: EqLambda, PktsLambda 
+* TimeDist.UNIFORM_T: EqLambda, MinPktLambda, MaxPktLambda 
+* TimeDist.NORMAL_T: EqLambda, AvgPktsLambda, StdDev 
+* TimeDist.ONOFF_T: EqLambda, PktsLambdaOn, AvgTOff, AvgTOn, ExpMaxFactor
+* TimeDist.PPBP_T: EqLambda, BurstGenLambda, Bitrate, ParetoMinSize, ParetoMazSize, ParetoAlfa, ExpMaxFactor
 
 ## 3.2 Parematers of size distributions
-* Deterministic: PktSize 
-* Uniform: AvgPktSize, MinSize, MaxSize 
-* Binomial: AvgPktSize, PktSize1, PktSize2 
-* Generic: AvgPktSize, NumCandidates, Size_i, Prob_i
+* SizeDist.DETERMINISTIC_S: PktSize 
+* SizeDist.UNIFORM_S: AvgPktSize, MinSize, MaxSize 
+* SizeDist.BINOMIAL_S: AvgPktSize, PktSize1, PktSize2 
+* SizeDist.GENERIC_S: AvgPktSize, NumCandidates, Size_i, Prob_i
 
 ## 3.3 Methods offered by Sample instances
 
