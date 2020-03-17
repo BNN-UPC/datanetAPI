@@ -228,6 +228,12 @@ class Sample:
         return len(self.topology_matrix)
         
         
+    def _set_data_set_file_name(self,file):
+        """
+        Sets the data set file from where the sample is extracted.
+        """
+        self.data_set_file = file
+        
     def _set_result_matrix(self, m):
         """
         Sets the result_matrix of this Sample instance.
@@ -276,6 +282,12 @@ class Sample:
         """
         
         self.delay_network = x
+        
+    def _get_data_set_file_name(self):
+        """
+        Gets the data set file from where the sample is extracted.
+        """
+        return self.data_set_file
     
     def _get_path_for_srcdst(self, src, dst):
         """
@@ -617,6 +629,8 @@ class ParsingTool:
                         routing_matrix= self._create_routing_matrix(g, routing_file)
                         while(True):
                             s = Sample()
+                            s._set_data_set_file_name(os.path.join(root, file))
+                            
                             results_line = results_file.readline().decode()[:-2]
                             traffic_line = traffic_file.readline().decode()[:-2]
                             if (flowresults_file):
