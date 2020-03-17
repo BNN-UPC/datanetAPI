@@ -111,6 +111,10 @@ class Sample:
     _traffic_matrix = None
     _routing_matrix = None
     _topology_matrix = None
+    
+    _s_line = None
+    _f_line = None
+    _t_line = None
         
     def get_result_matrix(self):
         """
@@ -566,7 +570,6 @@ class ParsingTool:
                 cap = cap[:len(cap)-4]
                 cap = float(cap)
                 mat[node,adj] = cap
-                # print (mat)
         return mat
 
     def __iter__(self):
@@ -605,7 +608,7 @@ class ParsingTool:
                         routing_file = tar.extractfile(dir_info.name+"/Routing.txt")
                         results_file = tar.extractfile(dir_info.name+"/simulationResults.txt")
                         traffic_file = tar.extractfile(dir_info.name+"/traffic.txt")
-                        if ("flowSimulationResults.txt" in tar.getnames()):
+                        if (dir_info.name+"/flowSimulationResults.txt" in tar.getnames()):
                             flowresults_file = tar.extractfile(dir_info.name+"/flowSimulationResults.txt")
                         else:
                             flowresults_file = None
@@ -614,12 +617,17 @@ class ParsingTool:
                         routing_matrix= self._create_routing_matrix(g, routing_file)
                         while(True):
                             s = Sample()
-                            results_line = results_file.readline()
-                            traffic_line = traffic_file.readline()
+                            results_line = results_file.readline().decode()[:-2]
+                            traffic_line = traffic_file.readline().decode()[:-2]
                             if (flowresults_file):
-                                flowresults_line = flowresults_file.readline()
+                                flowresults_line = flowresults_file.readline().decode()[:-2]
                             else:
                                 flowresults_line = None
+                            
+                            s._s_line = results_line
+                            s._f_line = flowresults_line
+                            s._t_line = traffic_line
+                            
                             if (len(results_line) == 0) or (len(traffic_line) == 0):
                                 break
                             if (feasibility_of_file == 1):
@@ -660,26 +668,18 @@ class ParsingTool:
         """
         
         q_flows = queue.Queue()
-        r = str(rline)
-        r = r[2:len(r)-4]
-        first_params = r.split('|')[0]
-        first_params = first_params.split(',')
+        first_params = rline.split('|')[0].split(',')
         first_params = list(map(float, first_params))
         s._set_pkt_by_network(first_params[0])
         s._set_loses_by_network(first_params[1])
         s._set_delay_network(first_params[2])
-        r = r.split('|')[1].split(';')
-        
+        r = rline.split('|')[1].split(';')
         if (fline):
-            f = str(fline)
-            f = f[2:len(f)-4]
-            f = f.split(';')
+            f = fline.split(';')
         else:
             f = r
         
-        t  = str(tline)
-        t = t[2:len(t)-4]
-        t = t.split('|')[1].split(';')
+        t = tline.split('|')[1].split(';')
         
         m_result = []
         m_traffic = []
@@ -688,17 +688,17 @@ class ParsingTool:
             new_traffic_row = []
             for j in range(i, i+int(math.sqrt(len(r)))):
                 dict_result_srcdst = {}
-                aux_agg = r[j].split(',')
-                aux_agg = list(map(float, aux_agg))
+                aux_agg_ = r[j].split(',')
+                aux_agg = list(map(float, aux_agg_))
                 dict_result_agg = {'PktsDrop':aux_agg[2], "AvgDelay":aux_agg[3], "AvgLnDelay":aux_agg[4], "p10":aux_agg[5], "p20":aux_agg[6], "p50":aux_agg[7], "p80":aux_agg[8], "p90":aux_agg[9], "Jitter":aux_agg[10]}
                 
-                aux_result_flows = f[j].split(':')
                 lst_result_flows = []
+                aux_result_flows = f[j].split(':')
                 for flow in aux_result_flows:
                     dict_result_tmp = {}
                     tmp_result_flow = flow.split(',')
                     tmp_result_flow = list(map(float, tmp_result_flow))
-                    q_flows.put([tmp_result_flow[0], tmp_result_flow[1], tmp_result_flow[2]])
+                    q_flows.put([tmp_result_flow[0], tmp_result_flow[1]])
                     dict_result_tmp = {'PktsDrop':tmp_result_flow[2], "AvgDelay":tmp_result_flow[3], "AvgLnDelay":tmp_result_flow[4], "p10":tmp_result_flow[5], "p20":tmp_result_flow[6], "p50":tmp_result_flow[7], "p80":tmp_result_flow[8], "p90":tmp_result_flow[9], "Jitter":tmp_result_flow[10]}
                     lst_result_flows.append(dict_result_tmp)
                 
@@ -708,19 +708,17 @@ class ParsingTool:
                 lst_traffic_flows = []
                 aux_traffic_flows = t[j].split(':')
                 for flow in aux_traffic_flows:
-                    dict_traffic_tmp = {}
+                    dict_traffic = {}
+                    q_values_for_flow = q_flows.get()
                     tmp_traffic_flow = flow.split(',')
                     tmp_traffic_flow = list(map(float, tmp_traffic_flow))
-                    temp = self._timedistparams(tmp_traffic_flow)
-                    partial = temp[0]
-                    if partial is not None:
-                        final = self._sizedistparams(tmp_traffic_flow, temp[1], partial)
-                        q_values_for_flow = q_flows.get()
-                        final['AvgBw'] = q_values_for_flow[0]
-                        final['PktsGen'] = q_values_for_flow[1]
-                        dict_traffic_tmp = final
-                    lst_traffic_flows.append (dict_traffic_tmp)
-                
+                    offset = self._timedistparams(tmp_traffic_flow,dict_traffic)
+                    if offset != -1:
+                        self._sizedistparams(tmp_traffic_flow, offset, dict_traffic)
+                        dict_traffic['AvgBw'] = q_values_for_flow[0]
+                        dict_traffic['PktsGen'] = q_values_for_flow[1]
+                    if (len(dict_traffic.keys())!=0):
+                        lst_traffic_flows.append (dict_traffic)
                 
                 dict_result_srcdst['AggInfo'] = dict_result_agg
                 dict_result_srcdst['Flows'] = lst_result_flows
@@ -736,70 +734,69 @@ class ParsingTool:
         s._set_result_matrix(m_result)
         s._set_traffic_matrix(m_traffic)
 
-    def _timedistparams(self, data):
+    def _timedistparams(self, data, dict_traffic):
         """
         
 
         Parameters
         ----------
-        data : str
-            Portion of the traffic file line where the data regarding the time
-            distribution is contained.
+        data : List
+            List of all the flow traffic parameters to be processed.
+        dict_traffic: dictionary
+            Dictionary to fill with the time distribution information
+            extracted from data
 
         Returns
         -------
-        [info, continuationPoint] : dictionary
-            Dictionary containing the info collected until now, and the point
-            of the overall traffic file line where the parsing process should
-            continue.
+        offset : int
+            Number of elements read from the list of parameters data
 
         """
         
-        temp = {}
     #    print(data[0])
         if data[0] == 0: 
-            temp['TimeDist'] = TimeDist.EXPONENTIAL_T
+            dict_traffic['TimeDist'] = TimeDist.EXPONENTIAL_T
             params = {}
             params['EqLambda'] = data[1]
             params['AvgPktsLambda'] = data[2]
             params['ExpMaxFactor'] = data[3]
-            temp['TimeDistParams'] = params
-            return [temp, 4]
+            dict_traffic['TimeDistParams'] = params
+            return 4
         elif data[0] == 1:
-            temp['TimeDist'] = TimeDist.DETERMINISTIC_T
+            dict_traffic['TimeDist'] = TimeDist.DETERMINISTIC_T
             params = {}
             params['EqLambda'] = data[1]
             params['PktsLambda'] = data[2]
-            temp['TimeDistParams'] = params
-            return [temp, 3]
+            dict_traffic['TimeDistParams'] = params
+            return 3
         elif data[0] == 2:
-            temp['TimeDist'] = TimeDist.UNIFORM_T
+            dict_traffic['TimeDist'] = TimeDist.UNIFORM_T
             params = {}
             params['EqLambda'] = data[1]
             params['MinPktLambda'] = data[2]
             params['MaxPktLambda'] = data[3]
-            temp['TimeDistParams'] = params
-            return [temp, 4]
+            dict_traffic['TimeDistParams'] = params
+            return 4
         elif data[0] == 3:
-            temp['TimeDist'] = TimeDist.NORMAL_T
+            dict_traffic['TimeDist'] = TimeDist.NORMAL_T
             params = {}
             params['EqLambda'] = data[1]
             params['AvgPktsLambda'] = data[2]
             params['StdDev'] = data[3]
-            temp['TimeDistParams'] = params
-            return [temp, 4]
+            dict_traffic['TimeDistParams'] = params
+            return 4
         elif data[0] == 4:
-            temp['TimeDist'] = TimeDist.ONOFF_T
+            dict_traffic['TimeDist'] = TimeDist.ONOFF_T
             params = {}
             params['EqLambda'] = data[1]
             params['PktsLambdaOn'] = data[2]
             params['AvgTOff'] = data[3]
             params['AvgTOn'] = data[4]
             params['ExpMaxFactor'] = data[5]
-            temp['TimeDistParams'] = params
-            return [temp, 6]
+            dict_traffic['TimeDistParams'] = params
+            return 6
         elif data[0] == 5:
-            temp['TimeDist'] = TimeDist.PPBP_T
+            dict_traffic['TimeDist'] = TimeDist.PPBP_T
             params = {}
             params['EqLambda'] = data[1]
             params['BurstGenLambda'] = data[2]
@@ -808,63 +805,63 @@ class ParsingTool:
             params['ParetoMaxSize'] = data[5]
             params['ParetoAlfa'] = data[6]
             params['ExpMaxFactor'] = data[7]
-            temp['TimeDistParams'] = params
-            return [temp, 8]
-        else: return [None, None]
+            dict_traffic['TimeDistParams'] = params
+            return 8
+        else: return -1
     
-    def _sizedistparams(self, data, starting_point, ret):
+    def _sizedistparams(self, data, starting_point, dict_traffic):
         """
         
 
         Parameters
         ----------
-        data : str
-            Portion of the traffic file line where the data regarding the size
-            distribution is contained.
+        data : List
+            List of all the flow traffic parameters to be processed.
         starting_point : int
             Point of the overall traffic file line where the extraction of
             data regarding the size distribution should start.
-        ret : dictionary
-            Dictionary returned by the previous parsing process. The one that
-            handled the time distribution data extraction.
+        dict_traffic : dictionary
+            Dictionary to fill with the size distribution information
+            extracted from data
 
         Returns
         -------
-        ret : dictionary
-            Updated dictionary with all the information abour size and time
-            distribution in the current traffic file line.
+        ret : int
+            0 if it finish successfully and -1 otherwise
 
         """
         
         if data[starting_point] == 0:
-            ret['SizeDist'] = SizeDist.DETERMINISTIC_S
+            dict_traffic['SizeDist'] = SizeDist.DETERMINISTIC_S
             params = {}
             params['AvgPktSize'] = data[starting_point+1]
-            ret['SizeDistParams'] = params
+            dict_traffic['SizeDistParams'] = params
         elif data[starting_point] == 1:
-            ret['SizeDist'] = SizeDist.UNIFORM_S
+            dict_traffic['SizeDist'] = SizeDist.UNIFORM_S
             params = {}
             params['AvgPktSize'] = data[starting_point+1]
             params['MinSize'] = data[starting_point+2]
             params['MaxSize'] = data[starting_point+3]
-            ret['SizeDistParams'] = params
+            dict_traffic['SizeDistParams'] = params
         elif data[starting_point] == 2:
-            ret['SizeDist'] = SizeDist.BINOMIAL_S
+            dict_traffic['SizeDist'] = SizeDist.BINOMIAL_S
             params = {}
             params['AvgPktSize'] = data[starting_point+1]
             params['PktSize1'] = data[starting_point+2]
             params['PktSize2'] = data[starting_point+3]
-            ret['SizeDistParams'] = params
+            dict_traffic['SizeDistParams'] = params
         elif data[starting_point] == 3:
-            ret['SizeDist'] = SizeDist.GENERIC_S
+            dict_traffic['SizeDist'] = SizeDist.GENERIC_S
             params = {}
             params['AvgPktSize'] = data[starting_point+1]
             params['NumCandidates'] = data[starting_point+2]
             for i in range(0, int(data[starting_point+2]) * 2, 2):
                 params["Size_%d"%(i/2)] = data[starting_point+3+i]
                 params["Prob_%d"%(i/2)] = data[starting_point+4+i]
-            ret['SizeDistParams'] = params
-        return ret
+            dict_traffic['SizeDistParams'] = params
+        else:
+            return -1
+        return 0
 
 # tool = ParsingTool('d:/Master_MIRI/BNN/API/nsfnetbw/', [])
 #tool = ParsingTool('./nsfnetbw/', [])
