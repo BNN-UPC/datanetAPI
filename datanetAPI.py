@@ -731,6 +731,7 @@ class ParsingTool:
                         self._sizedistparams(tmp_traffic_flow, offset, dict_traffic)
                         dict_traffic['AvgBw'] = q_values_for_flow[0]
                         dict_traffic['PktsGen'] = q_values_for_flow[1]
+                        dict_traffic['ToS'] = tmp_traffic_flow[-1]
                     if (len(dict_traffic.keys())!=0):
                         lst_traffic_flows.append (dict_traffic)
                 
