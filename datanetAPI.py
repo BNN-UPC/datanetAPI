@@ -1,6 +1,6 @@
 '''
  *
- * Copyright (C) 2020 CBA research group, Technical University of Catalonia.
+ * Copyright (C) 2020 Universitat Politècnica de Catalunya.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 
 # -*- coding: utf-8 -*-
 
-import os, tarfile, numpy, math, networkx, queue, random
+import os, tarfile, numpy, math, networkx, queue, random,traceback
 from enum import IntEnum
 
 class TimeDist(IntEnum):
@@ -80,13 +80,16 @@ class Sample:
     
     Attributes
     ----------
-    pkt_by_network : double
+    global_packets : double
         Overall number of packets transmitteds in network
-    loses_by_network : double
+    global_losses : double
         Overall number of packets lost in network
-    delay_network : double
+    global_delay : double
         Overall delay in network
-    result_matrix : NxN matrix
+    maxAvgLambda: double
+        This variable is used in our simulator to define the overall traffic 
+        intensity  of the network scenario
+    performance_matrix : NxN matrix
         Matrix where each cell [i,j] contains aggregated and flow-level
         information about transmission parameters between source i and
         destination j.
@@ -101,27 +104,62 @@ class Sample:
         Network topology using networkx format.
     """
     
-    _pkt_by_network = None
-    _loses_by_network = None
-    _delay_network = None
+    global_packets = None
+    global_losses = None
+    global_delay = None
+    maxAvgLambda = None
     
-    _result_matrix = None
-    _traffic_matrix = None
-    _routing_matrix = None
-    _topology_object = None
+    performance_matrix = None
+    traffic_matrix = None
+    routing_matrix = None
+    topology_object = None
     
     _results_line = None
     _traffic_line = None
+    _input_files_line = None
+    _status_line = None
     _flowresults_line = None
-        
-    def get_result_matrix(self):
-        """
-        Returns the result_matrix of this Sample instance.
-        """
-        
-        return self.result_matrix
+    _routing_file = None
+    _graph_file = None
     
-    def get_srcdst_result(self, src, dst):
+    def get_global_packets(self):
+        """
+        Return the number of packets transmitted in the network per time unit of this Sample instance.
+        """
+        
+        return self.global_packets
+
+    def get_global_losses(self):
+        """
+        Return the number of packets dropped in the network per time unit of this Sample instance.
+        """
+        
+        return self.global_losses
+    
+    def get_global_delay(self):
+        """
+        Return the average per-packet delay over all the packets transmitted in the network in time units 
+        of this sample instance.
+        """
+        
+        return self.global_losses
+    
+    def get_maxAvgLambda(self):
+        """
+        Returns the maxAvgLamda used in the current iteration. This variable is used in our simulator to define 
+        the overall traffic intensity of the network scenario.
+        """
+        
+        return self.global_losses
+        
+    def get_performance_matrix(self):
+        """
+        Returns the performance_matrix of this Sample instance.
+        """
+        
+        return self.performance_matrix
+    
+    def get_srcdst_performance(self, src, dst):
         """
         
 
@@ -138,7 +176,7 @@ class Sample:
             Information stored in the Result matrix for the requested src-dst.
 
         """
-        return self.result_matrix[src, dst]
+        return self.performance_matrix[src, dst]
         
     def get_traffic_matrix(self):
         """
@@ -198,7 +236,59 @@ class Sample:
         Returns the topology in networkx format of this Sample instance.
         """
         
-        return self._topology_object
+        return self.topology_object
+    
+    def get_network_size(self):
+        """
+        Returns the number of nodes of the topology.
+        """
+        return self.topology_object.number_of_nodes()
+    
+    def get_node_properties(self, id):
+        """
+        
+
+        Parameters
+        ----------
+        id : int
+            Node identifier.
+
+        Returns
+        -------
+        Dictionary with the parameters of the node
+        None if node doesn't exist
+
+        """
+        res = None
+        
+        if id in self.topology_object.nodes:
+            res = self.topology_object.nodes[id] 
+        
+        return res
+    
+    def get_link_properties(self, src, dst):
+        """
+        
+
+        Parameters
+        ----------
+        src : int
+            Source node.
+        dst : int
+            Destination node.
+
+        Returns
+        -------
+        Dictionary with the parameters of the link
+        None if no link exist between src and dst
+
+        """
+        res = None
+        
+        if dst in self.topology_object[src]:
+            res = self.topology_object[src][dst][0] 
+        
+        return res
     
     def get_srcdst_link_bandwidth(self, src, dst):
         """
@@ -213,24 +303,15 @@ class Sample:
 
         Returns
         -------
-        Bandwidth of the link between nodes src-dst or -1 if
-        Dictionary
-            Information stored in the Topology matrix for the requested src-dst.
+        Bandwidth in bits/time unit of the link between nodes src-dst or -1 if not connected
 
         """
-        if dst in self._topology_object[src]:
-            cap = self._topology_object[src][dst][0]['bandwidth']
-            cap = float(cap[:len(cap)-4])
+        if dst in self.topology_object[src]:
+            cap = float(self.topology_object[src][dst][0]['bandwidth'])
         else:
             cap = -1
             
         return cap
-    
-    def get_network_size(self):
-        """
-        Returns the number of nodes of the topology.
-        """
-        return self._topology_object.number_of_nodes()
         
         
     def _set_data_set_file_name(self,file):
@@ -239,12 +320,12 @@ class Sample:
         """
         self.data_set_file = file
         
-    def _set_result_matrix(self, m):
+    def _set_performance_matrix(self, m):
         """
-        Sets the result_matrix of this Sample instance.
+        Sets the performance_matrix of this Sample instance.
         """
         
-        self.result_matrix = m
+        self.performance_matrix = m
         
     def _set_traffic_matrix(self, m):
         """
@@ -265,28 +346,28 @@ class Sample:
         Sets the topology_object of this Sample instance.
         """
         
-        self._topology_object = G
+        self.topology_object = G
         
-    def _set_pkt_by_network(self, x):
+    def _set_global_packets(self, x):
         """
-        Sets the pkt_by_network of this Sample instance.
-        """
-        
-        self.pkt_by_network = x
-        
-    def _set_loses_by_network(self, x):
-        """
-        Sets the loses_by_network of this Sample instance.
+        Sets the global_packets of this Sample instance.
         """
         
-        self.loses_by_network = x
+        self.global_packets = x
         
-    def _set_delay_network(self, x):
+    def _set_global_losses(self, x):
         """
-        Sets the delay_network of this Sample instance.
+        Sets the global_losses of this Sample instance.
         """
         
-        self.delay_network = x
+        self.global_losses = x
+        
+    def _set_global_delay(self, x):
+        """
+        Sets the global_delay of this Sample instance.
+        """
+        
+        self.global_delay = x
         
     def _get_data_set_file_name(self):
         """
@@ -352,7 +433,7 @@ class Sample:
         between node src and node dst regarding communication parameters.
         """
         
-        return self.result_matrix[src, dst]
+        return self.performance_matrix[src, dst]
     
     def _get_trafficdict_for_srcdst (self, src, dst):
         """
@@ -363,14 +444,14 @@ class Sample:
         
         return self.traffic_matrix[src, dst]
 
-class ParsingTool:
+class DatanetAPI:
     """
     Class containing all the functionalities to read the dataset line by line
     by means of an iteratos, and generate a Sample instance with the
     information gathered.
     """
     
-    def __init__ (self, data_folder, intensity_values = []):
+    def __init__ (self, data_folder, intensity_values = [], shuffle=True):
         """
         Initialization of the PasringTool instance
 
@@ -385,7 +466,8 @@ class ParsingTool:
         intensity_values : int or array [x, y]
             User-defined intensity values used to constrain the reading process
             to these/this value/range of values.
-
+        shuffle: boolean
+            Specify if all files should be shuffled. By default true
         Returns
         -------
         None.
@@ -395,6 +477,7 @@ class ParsingTool:
         self.data_folder = data_folder
         self.dict_queue = queue.Queue()
         self.intensity_values = intensity_values
+        self.shuffle = shuffle
 
     def _readRoutingFile(self, routing_file, netSize):
         """
@@ -415,10 +498,10 @@ class ParsingTool:
 
         """
         
+        fd = open(routing_file,"r")
         R = numpy.zeros((netSize, netSize)) - 1
         src = 0
-        for line in routing_file:
-            line = line.decode()
+        for line in fd:
             camps = line.split(',')
             dst = 0
             for port in camps[:-1]:
@@ -469,7 +552,6 @@ class ParsingTool:
             i to node j.
 
         """
-        
         netSize = G.number_of_nodes()
         node_port_dst = self._getRoutingSrcPortDst(G)
         R = self._readRoutingFile(routing_file, netSize)
@@ -486,27 +568,55 @@ class ParsingTool:
                 MatrixPath[src][dst] = path
         return (MatrixPath)
 
-    def _get_graph_for_tarfile(self, tar):
+    def _generate_graphs_dic(self, path):
+        print(path)
         """
-        
-
+        Return a dictionary with networkx objects generated from the GML
+        files found in path
+ 
         Parameters
         ----------
-        tar : str
-            tar file where the graph file is located.
-
+        path : str
+            Direcotory where the graphs files are located.
+ 
         Returns
         -------
-        ret : graph
-            Graph representation of the network.
-
+        Returns a dictionary where keys are the names of GML files found in path 
+        and the values are the networkx object generated from the GML files.
+         
         """
         
-        for member in tar.getmembers():
-            if 'graph' in member.name:
-                f = tar.extractfile(member)
-                ret = networkx.read_gml(f, destringizer=int)
-                return ret
+        graphs_dic = {}
+        for topology_file in os.listdir(path):
+            G = networkx.read_gml(path+"/"+topology_file, destringizer=int)
+            graphs_dic[topology_file] = G
+            print(topology_file)
+        
+        return graphs_dic
+
+    def _generate_routings_dic(self, path,G):
+        """
+        Return a dictionary with routing matrices generated from the 
+        routing files found in path
+ 
+        Parameters
+        ----------
+        path : str
+            Direcotory where the routing files are located.
+ 
+        Returns
+        -------
+        Returns a dictionary where keys are the names of routing files found in 
+        path and the values are the routing matrices generated from the routing 
+        files.
+         
+        """
+        routings_dic = {}
+        for routing_file in os.listdir(path):
+            R = self._create_routing_matrix(G,path+"/"+routing_file)
+            routings_dic[routing_file] = R
+        
+        return routings_dic
 
     def _check_intensity(self, file):
         """
@@ -567,68 +677,96 @@ class ParsingTool:
         """
         
         g = None
+        
+        tuple_files = []
+        graphs_dic = {}
+        routings_dic = {}
         for root, dirs, files in os.walk(self.data_folder):
-            if (len(dirs)!=0):
+            if ("graphs" not in dirs or "routings" not in dirs):
                 continue
-            if ("graph_attr.txt" in files):
-                g = networkx.read_gml(os.path.join(root, "graph_attr.txt"), destringizer=int)
-            else:
-                print('Unable to find the graph information file')
-                break
-            tar_files = [f for f in files if f.endswith("tar.gz")]
-            random.shuffle(tar_files)
-            for file in tar_files:
-                if(file.endswith("tar.gz")):
-                    
-                    if (len(self.intensity_values) == 0): feasibility_of_file = 2
-                    else: feasibility_of_file = self._check_intensity(file)
-                    
-                    if(feasibility_of_file != 0):
-                        tar = tarfile.open(os.path.join(root, file), 'r:gz')
-                        dir_info = tar.next()
-                        routing_file = tar.extractfile(dir_info.name+"/Routing.txt")
-                        results_file = tar.extractfile(dir_info.name+"/simulationResults.txt")
-                        traffic_file = tar.extractfile(dir_info.name+"/traffic.txt")
-                        status_file = tar.extractfile(dir_info.name+"/stability.txt")
-                        if (dir_info.name+"/flowSimulationResults.txt" in tar.getnames()):
-                            flowresults_file = tar.extractfile(dir_info.name+"/flowSimulationResults.txt")
-                        else:
-                            flowresults_file = None
-                        
-                        routing_matrix= self._create_routing_matrix(g, routing_file)
-                        while(True):
-                            s = Sample()
-                            s._set_data_set_file_name(os.path.join(root, file))
-                            
-                            s._results_line = results_file.readline().decode()[:-2]
-                            s._traffic_line = traffic_file.readline().decode()[:-2]
-                            if (flowresults_file):
-                                s._flowresults_line = flowresults_file.readline().decode()[:-2]
-                            else:
-                                s._flowresults_line = None
-                            status_line = status_file.readline().decode()[:-2]
-                            
-                            if (len(s._results_line) == 0) or (len(s._traffic_line) == 0):
-                                break
-                            
-                            if (not ";OK;" in status_line):
-                                print ("Removed iteration: "+status_line)
-                                continue;
-                            if (feasibility_of_file == 1):
-                                tmp = str(s._traffic_line)
-                                tmp = tmp.split('|')
-                                specific_intensity = tmp[0]
-                                specific_intensity = specific_intensity[2:len(specific_intensity)-1]
-                                specific_intensity = float(specific_intensity)
-                                if(specific_intensity < self.intensity_values[0]) or (specific_intensity > self.intensity_values[1]):
-                                    continue
-                                
-                            self._process_flow_results_traffic_line(s._results_line, s._traffic_line, s._flowresults_line, status_line, s)
-                            s._set_routing_matrix(routing_matrix)
-                            s._set_topology_object(g)
-                            yield s
+            # Generate graphs dictionaries
+            graphs_dic[root] = self._generate_graphs_dic(root+"/graphs")
+            if (len(graphs_dic[root].keys()) == 0):
+                print ("Error: No graphs found in directory "+root)
+                exit()
+            routings_dic[root] = {}
+            # Extend the list of files to process
+            tuple_files.extend([(root, f) for f in files if f.endswith("tar.gz")])
+
+        if self.shuffle:
+            random.Random(1234).shuffle(tuple_files)
+        
+        ctr = 0
+        for root, file in tuple_files:
+            if (len(self.intensity_values) == 0): feasibility_of_file = 2
+            else: feasibility_of_file = self._check_intensity(file)
+            if(feasibility_of_file != 0):
+                try:
+                    it = 0 
+                    tar = tarfile.open(os.path.join(root, file), 'r:gz')
+                    dir_info = tar.next()
+                    results_file = tar.extractfile(dir_info.name+"/simulationResults.txt")
+                    traffic_file = tar.extractfile(dir_info.name+"/traffic.txt")
+                    status_file = tar.extractfile(dir_info.name+"/stability.txt")
+                    input_files = tar.extractfile(dir_info.name+"/input_files.txt")
+                    if (dir_info.name+"/flowSimulationResults.txt" in tar.getnames()):
+                        flowresults_file = tar.extractfile(dir_info.name+"/flowSimulationResults.txt")
                     else:
-                        continue
+                        flowresults_file = None
+                    while(True):
+                        s = Sample()
+                        s._set_data_set_file_name(os.path.join(root, file))
+                        
+                        s._results_line = results_file.readline().decode()[:-2]
+                        s._traffic_line = traffic_file.readline().decode()[:-1]
+                        if (flowresults_file):
+                            s._flowresults_line = flowresults_file.readline().decode()[:-2]
+                        else:
+                            s._flowresults_line = None
+                        s._status_line = status_file.readline().decode()[:-1]
+                        s._input_files_line = input_files.readline().decode()[:-1]
+                        
+                        if (len(s._results_line) == 0) or (len(s._traffic_line) == 0):
+                            break
+                        
+                        if (not ";OK;" in s._status_line):
+                            print ("Removed iteration: "+s._status_line)
+                            continue;
+                        
+                        if (feasibility_of_file == 1):
+                            ptr = s._traffic_line.find('|')
+                            specific_intensity = float(s._traffic_line[0:ptr])
+                            if(specific_intensity < self.intensity_values[0]) or (specific_intensity > self.intensity_values[1]):
+                                continue
+                        
+                        used_files = s._input_files_line.split(';')
+                        s._graph_file = used_files[1]
+                        s._routing_file = used_files[2]
+                        g = graphs_dic[root][s._graph_file]
+                        # XXX We considerer that all graphs using the same routing file have the same topology
+                        if (s._routing_file in routings_dic[root]):
+                            routing_matrix = routings_dic[root][s._routing_file]
+                        else:
+                            routing_matrix = self._create_routing_matrix(g,root+"/routings/"+s._routing_file)
+                            routings_dic[root][s._routing_file] = routing_matrix
+                        
+                        self._process_flow_results_traffic_line(s._results_line, s._traffic_line, s._flowresults_line, s._status_line, s)
+                        s._set_routing_matrix(routing_matrix)
+                        s._set_topology_object(g)
+                        it +=1
+                        yield s
+                except GeneratorExit:
+                    raise
+                except:
+                    traceback.print_exc()
+                    print ("Error in the file:" +file)
+                    print ("     iteration: " +str(it))
+                    exit()
+                    
+            else:
+                continue
+            ctr += 1
+            print("Progress check: %d/%d" % (ctr,len(tuple_files)))
     
     def _process_flow_results_traffic_line(self, rline, tline, fline, sline, s):
         """
@@ -654,16 +792,18 @@ class ParsingTool:
         q_flows = queue.Queue()
         first_params = rline.split('|')[0].split(',')
         first_params = list(map(float, first_params))
-        s._set_pkt_by_network(first_params[0])
-        s._set_loses_by_network(first_params[1])
-        s._set_delay_network(first_params[2])
-        r = rline.split('|')[1].split(';')
+        s._set_global_packets(first_params[0])
+        s._set_global_losses(first_params[1])
+        s._set_global_delay(first_params[2])
+        r = rline[rline.find('|')+1:].split(';')
         if (fline):
             f = fline.split(';')
         else:
             f = r
         
-        t = tline.split('|')[1].split(';')
+        ptr = tline.find('|')
+        t = tline[ptr+1:].split(';')
+        s.maxAvgLambda = float(tline[:ptr])
         sim_time  = float(sline.split(';')[0])
         
         m_result = []
@@ -688,7 +828,8 @@ class ParsingTool:
                     lst_result_flows.append(dict_result_tmp)
                 
                 dict_traffic_srcdst = {}
-                dict_traffic_agg = {'AvgBw':aux_agg[0],
+                # From kbps to bps
+                dict_traffic_agg = {'AvgBw':aux_agg[0]*1000,
                                     'PktsGen':aux_agg[1],
                                     'TotalPktsGen':aux_agg[1]*sim_time}
                 lst_traffic_flows = []
@@ -701,7 +842,8 @@ class ParsingTool:
                     offset = self._timedistparams(tmp_traffic_flow,dict_traffic)
                     if offset != -1:
                         self._sizedistparams(tmp_traffic_flow, offset, dict_traffic)
-                        dict_traffic['AvgBw'] = q_values_for_flow[0]
+                        # From kbps to bps
+                        dict_traffic['AvgBw'] = q_values_for_flow[0]*1000
                         dict_traffic['PktsGen'] = q_values_for_flow[1]
                         dict_traffic['TotalPktsGen'] = sim_time * dict_traffic['PktsGen']
                         dict_traffic['ToS'] = tmp_traffic_flow[-1]
@@ -719,7 +861,7 @@ class ParsingTool:
             m_traffic.append(new_traffic_row)
         m_result = numpy.asmatrix(m_result)
         m_traffic = numpy.asmatrix(m_traffic)
-        s._set_result_matrix(m_result)
+        s._set_performance_matrix(m_result)
         s._set_traffic_matrix(m_traffic)
 
     def _timedistparams(self, data, dict_traffic):
@@ -754,7 +896,7 @@ class ParsingTool:
             dict_traffic['TimeDist'] = TimeDist.DETERMINISTIC_T
             params = {}
             params['EqLambda'] = data[1]
-            params['PktsLambda'] = data[2]
+            params['AvgPktsLambda'] = data[2]
             dict_traffic['TimeDistParams'] = params
             return 3
         elif data[0] == 2:
@@ -851,19 +993,4 @@ class ParsingTool:
             return -1
         return 0
 
-# tool = ParsingTool('d:/Master_MIRI/BNN/API/nsfnetbw/', [])
-#tool = ParsingTool('./nsfnetbw/', [])
-#it = iter(tool)
-# for out in it:
-#     # print('----')
-#     # print(out.pkt_by_network)
-#     # print(out.loses_by_network)
-#     # print(out.delay_network)
-#     # print(out.get_result_matrix())
-#     # print(out.get_resultdict_for_srcdst(0, 1)['Flows']['0']['p80'])
-#     # print(out.traffic_matrix[0,1]['Flows']['0'])
-#     # print(out.topology_matrix)
-#     # print(out.routing_matrix)
-#     print(out.topology_matrix)
-#m = next(it).get_traffic_matrix()[0,1]
-#print(m)
+

@@ -44,6 +44,7 @@ More in detail, every sample instance comprises the following attributes:
 * *global_packets*: Number of packets transmitted in the network per time unit (packets/time unit).
 * *global_losses*: Packets lost in the network per time unit (packets/time unit).
 * *global_delay*: Average per-packet delay over all the packets transmitted in the network (time units).
+* *maxAvgLambda*: This variable is used in our simulator to define the overall traffic intensity of the network scenario. Particularly, this is the maximum average traffic rate (bits/time unit) that a path can generate in the simulation scenario. Then, the average traffic rate of each src-dst path (lambda) is computed as 'maxAvgLambda' multiplied by a random value between 0 a 1. Note that, this traffic rate may be split into several flows sending traffic over the same src-dst path.
 * *performance_matrix*: Matrix with aggregate src-dst and flow-level performance meaurements (delay, jitter and loss) measured on each src-dst pair (see more details below). 
 * *traffic_matrix*: Matrix with the time and size distributions used to generate traffic for each src-dst pair (see more details below). 
 * *routing_matrix*: Matrix with the paths to connect every src-dst pair (see more details below).
@@ -164,9 +165,10 @@ All the possible node parameters are listed below:
 
 The API includes methods to obtain more easily some information from a sample object. This includes different matrices and dictionaries described above. Thus, the user can use the following methods (hereafter, we assume that s is a sample object obtained from the iterator):
 
-* *s.get_global_packets()*: Return the number of packets transmitted in the network per time unit of the sample.
-* *s.get_global_losses()*: Return the number of packets dropped in the network per time unit of the sample.
-* *s.get_global_delay()*: Return the average per-packet delay over all the packets transmitted in the network in time units of the sample.
+* *s.get_global_packets()*: Returns the number of packets transmitted in the network per time unit of the sample.
+* *s.get_global_losses()*: Returns the number of packets dropped in the network per time unit of the sample.
+* *s.get_global_delay()*: Returns the average per-packet delay over all the packets transmitted in the network in time units of the sample.
+* *s.get_maxAvgLambda()*: Returns the maximum average lambda selected to generate the traffic matrix of the sample.
 * *s.get_performance_matrix()*: Returns the performance_matrix. Assuming this matrix is denoted by m, performance measurements of a specific src-dst pair can be accessed using m[src,dst]. See more details about the performance_matrix in the previous section.
 * *s.get_srcdst_performance(src,dst)*: Directly returns a dictionary with the performance measurements (e.g., delay, jitter, loss) stored in performance_matrix for a particular src-dst pair. See more details about the performance_matrix in the previous section.
 * *s.get_traffic_matrix()*: Returns the traffic_matrix. Assuming this matrix is denoted by m,  the information that traffic_matrix stores for a specific src-dst pair can be accessed using m[src,dst] . See more details about the traffic_matrix in the previous section.
