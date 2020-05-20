@@ -1,6 +1,6 @@
 '''
  *
- * Copyright (C) 2020 CBA research group, Technical University of Catalonia.
+ * Copyright (C) 2020 Universitat Politècnica de Catalunya.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,7 +18,7 @@
 
 # -*- coding: utf-8 -*-
 
-import os, tarfile, numpy, math, networkx, queue, random
+import os, tarfile, numpy, math, networkx, queue, random,traceback
 from enum import IntEnum
 
 class TimeDist(IntEnum):
@@ -80,13 +80,16 @@ class Sample:
     
     Attributes
     ----------
-    pkt_by_network : double
+    global_packets : double
         Overall number of packets transmitteds in network
-    loses_by_network : double
+    global_losses : double
         Overall number of packets lost in network
-    delay_network : double
+    global_delay : double
         Overall delay in network
-    result_matrix : NxN matrix
+    maxAvgLambda: double
+        This variable is used in our simulator to define the overall traffic 
+        intensity  of the network scenario
+    performance_matrix : NxN matrix
         Matrix where each cell [i,j] contains aggregated and flow-level
         information about transmission parameters between source i and
         destination j.
@@ -101,27 +104,61 @@ class Sample:
         Network topology using networkx format.
     """
     
-    _pkt_by_network = None
-    _loses_by_network = None
-    _delay_network = None
+    global_packets = None
+    global_losses = None
+    global_delay = None
+    maxAvgLambda = None
     
-    _result_matrix = None
-    _traffic_matrix = None
-    _routing_matrix = None
-    _topology_object = None
+    performance_matrix = None
+    traffic_matrix = None
+    routing_matrix = None
+    topology_object = None
     
     _results_line = None
     _traffic_line = None
+    _status_line = None
     _flowresults_line = None
-        
-    def get_result_matrix(self):
-        """
-        Returns the result_matrix of this Sample instance.
-        """
-        
-        return self.result_matrix
+    _routing_file = None
+    _graph_file = None
     
-    def get_srcdst_result(self, src, dst):
+    def get_global_packets(self):
+        """
+        Return the number of packets transmitted in the network per time unit of this Sample instance.
+        """
+        
+        return self.global_packets
+
+    def get_global_losses(self):
+        """
+        Return the number of packets dropped in the network per time unit of this Sample instance.
+        """
+        
+        return self.global_losses
+    
+    def get_global_delay(self):
+        """
+        Return the average per-packet delay over all the packets transmitted in the network in time units 
+        of this sample instance.
+        """
+        
+        return self.global_losses
+    
+    def get_maxAvgLambda(self):
+        """
+        Returns the maxAvgLamda used in the current iteration. This variable is used in our simulator to define 
+        the overall traffic intensity of the network scenario.
+        """
+        
+        return self.global_losses
+        
+    def get_performance_matrix(self):
+        """
+        Returns the performance_matrix of this Sample instance.
+        """
+        
+        return self.performance_matrix
+    
+    def get_srcdst_performance(self, src, dst):
         """
         
 
@@ -138,7 +175,7 @@ class Sample:
             Information stored in the Result matrix for the requested src-dst.
 
         """
-        return self.result_matrix[src, dst]
+        return self.performance_matrix[src, dst]
         
     def get_traffic_matrix(self):
         """
@@ -198,7 +235,59 @@ class Sample:
         Returns the topology in networkx format of this Sample instance.
         """
         
-        return self._topology_object
+        return self.topology_object
+    
+    def get_network_size(self):
+        """
+        Returns the number of nodes of the topology.
+        """
+        return self.topology_object.number_of_nodes()
+    
+    def get_node_properties(self, id):
+        """
+        
+
+        Parameters
+        ----------
+        id : int
+            Node identifier.
+
+        Returns
+        -------
+        Dictionary with the parameters of the node
+        None if node doesn't exist
+
+        """
+        res = None
+        
+        if id in self.topology_object.nodes:
+            res = self.topology_object.nodes[id] 
+        
+        return res
+    
+    def get_link_properties(self, src, dst):
+        """
+        
+
+        Parameters
+        ----------
+        src : int
+            Source node.
+        dst : int
+            Destination node.
+
+        Returns
+        -------
+        Dictionary with the parameters of the link
+        None if no link exist between src and dst
+
+        """
+        res = None
+        
+        if dst in self.topology_object[src]:
+            res = self.topology_object[src][dst][0] 
+        
+        return res
     
     def get_srcdst_link_bandwidth(self, src, dst):
         """
@@ -213,24 +302,15 @@ class Sample:
 
         Returns
         -------
-        Bandwidth of the link between nodes src-dst or -1 if
-        Dictionary
-            Information stored in the Topology matrix for the requested src-dst.
+        Bandwidth in bits/time unit of the link between nodes src-dst or -1 if not connected
 
         """
-        if dst in self._topology_object[src]:
-            cap = self._topology_object[src][dst][0]['bandwidth']
-            cap = float(cap[:len(cap)-4])
+        if dst in self.topology_object[src]:
+            cap = float(self.topology_object[src][dst][0]['bandwidth'])
         else:
             cap = -1
             
         return cap
-    
-    def get_network_size(self):
-        """
-        Returns the number of nodes of the topology.
-        """
-        return self._topology_object.number_of_nodes()
         
         
     def _set_data_set_file_name(self,file):
@@ -239,12 +319,12 @@ class Sample:
         """
         self.data_set_file = file
         
-    def _set_result_matrix(self, m):
+    def _set_performance_matrix(self, m):
         """
-        Sets the result_matrix of this Sample instance.
+        Sets the performance_matrix of this Sample instance.
         """
         
-        self.result_matrix = m
+        self.performance_matrix = m
         
     def _set_traffic_matrix(self, m):
         """
@@ -265,28 +345,28 @@ class Sample:
         Sets the topology_object of this Sample instance.
         """
         
-        self._topology_object = G
+        self.topology_object = G
         
-    def _set_pkt_by_network(self, x):
+    def _set_global_packets(self, x):
         """
-        Sets the pkt_by_network of this Sample instance.
-        """
-        
-        self.pkt_by_network = x
-        
-    def _set_loses_by_network(self, x):
-        """
-        Sets the loses_by_network of this Sample instance.
+        Sets the global_packets of this Sample instance.
         """
         
-        self.loses_by_network = x
+        self.global_packets = x
         
-    def _set_delay_network(self, x):
+    def _set_global_losses(self, x):
         """
-        Sets the delay_network of this Sample instance.
+        Sets the global_losses of this Sample instance.
         """
         
-        self.delay_network = x
+        self.global_losses = x
+        
+    def _set_global_delay(self, x):
+        """
+        Sets the global_delay of this Sample instance.
+        """
+        
+        self.global_delay = x
         
     def _get_data_set_file_name(self):
         """
@@ -352,7 +432,7 @@ class Sample:
         between node src and node dst regarding communication parameters.
         """
         
-        return self.result_matrix[src, dst]
+        return self.performance_matrix[src, dst]
     
     def _get_trafficdict_for_srcdst (self, src, dst):
         """
@@ -363,7 +443,7 @@ class Sample:
         
         return self.traffic_matrix[src, dst]
 
-class ParsingTool:
+class DatanetAPI:
     """
     Class containing all the functionalities to read the dataset line by line
     by means of an iteratos, and generate a Sample instance with the
@@ -396,7 +476,7 @@ class ParsingTool:
         self.dict_queue = queue.Queue()
         self.intensity_values = intensity_values
 
-    def _readRoutingFile(self, routing_file, netSize):
+    def _readRoutingFile(self, routing_fd, netSize):
         """
         Pending to compare against getSrcPortDst
 
@@ -417,7 +497,7 @@ class ParsingTool:
         
         R = numpy.zeros((netSize, netSize)) - 1
         src = 0
-        for line in routing_file:
+        for line in routing_fd:
             line = line.decode()
             camps = line.split(',')
             dst = 0
@@ -606,12 +686,12 @@ class ParsingTool:
                                 s._flowresults_line = flowresults_file.readline().decode()[:-2]
                             else:
                                 s._flowresults_line = None
-                            status_line = status_file.readline().decode()[:-2]
+                            s._status_line = status_file.readline().decode()[:-2]
                             
                             if (len(s._results_line) == 0) or (len(s._traffic_line) == 0):
                                 break
                             
-                            if (not ";OK;" in status_line):
+                            if (not ";OK;" in s._status_line):
                                 print ("Removed iteration: "+status_line)
                                 continue;
                             if (feasibility_of_file == 1):
@@ -654,16 +734,18 @@ class ParsingTool:
         q_flows = queue.Queue()
         first_params = rline.split('|')[0].split(',')
         first_params = list(map(float, first_params))
-        s._set_pkt_by_network(first_params[0])
-        s._set_loses_by_network(first_params[1])
-        s._set_delay_network(first_params[2])
-        r = rline.split('|')[1].split(';')
+        s._set_global_packets(first_params[0])
+        s._set_global_losses(first_params[1])
+        s._set_global_delay(first_params[2])
+        r = rline[rline.find('|')+1:].split(';')
         if (fline):
             f = fline.split(';')
         else:
             f = r
         
-        t = tline.split('|')[1].split(';')
+        ptr = tline.find('|')
+        t = tline[ptr+1:].split(';')
+        s.maxAvgLambda = float(tline[:ptr])
         sim_time  = float(sline.split(';')[0])
         
         m_result = []
@@ -688,7 +770,8 @@ class ParsingTool:
                     lst_result_flows.append(dict_result_tmp)
                 
                 dict_traffic_srcdst = {}
-                dict_traffic_agg = {'AvgBw':aux_agg[0],
+                # From kbps to bps
+                dict_traffic_agg = {'AvgBw':aux_agg[0]*1000,
                                     'PktsGen':aux_agg[1],
                                     'TotalPktsGen':aux_agg[1]*sim_time}
                 lst_traffic_flows = []
@@ -701,7 +784,8 @@ class ParsingTool:
                     offset = self._timedistparams(tmp_traffic_flow,dict_traffic)
                     if offset != -1:
                         self._sizedistparams(tmp_traffic_flow, offset, dict_traffic)
-                        dict_traffic['AvgBw'] = q_values_for_flow[0]
+                        # From kbps to bps
+                        dict_traffic['AvgBw'] = q_values_for_flow[0]*1000
                         dict_traffic['PktsGen'] = q_values_for_flow[1]
                         dict_traffic['TotalPktsGen'] = sim_time * dict_traffic['PktsGen']
                         dict_traffic['ToS'] = tmp_traffic_flow[-1]
@@ -719,7 +803,7 @@ class ParsingTool:
             m_traffic.append(new_traffic_row)
         m_result = numpy.asmatrix(m_result)
         m_traffic = numpy.asmatrix(m_traffic)
-        s._set_result_matrix(m_result)
+        s._set_performance_matrix(m_result)
         s._set_traffic_matrix(m_traffic)
 
     def _timedistparams(self, data, dict_traffic):
@@ -754,7 +838,7 @@ class ParsingTool:
             dict_traffic['TimeDist'] = TimeDist.DETERMINISTIC_T
             params = {}
             params['EqLambda'] = data[1]
-            params['PktsLambda'] = data[2]
+            params['AvgPktsLambda'] = data[2]
             dict_traffic['TimeDistParams'] = params
             return 3
         elif data[0] == 2:
@@ -851,19 +935,4 @@ class ParsingTool:
             return -1
         return 0
 
-# tool = ParsingTool('d:/Master_MIRI/BNN/API/nsfnetbw/', [])
-#tool = ParsingTool('./nsfnetbw/', [])
-#it = iter(tool)
-# for out in it:
-#     # print('----')
-#     # print(out.pkt_by_network)
-#     # print(out.loses_by_network)
-#     # print(out.delay_network)
-#     # print(out.get_result_matrix())
-#     # print(out.get_resultdict_for_srcdst(0, 1)['Flows']['0']['p80'])
-#     # print(out.traffic_matrix[0,1]['Flows']['0'])
-#     # print(out.topology_matrix)
-#     # print(out.routing_matrix)
-#     print(out.topology_matrix)
-#m = next(it).get_traffic_matrix()[0,1]
-#print(m)
+
