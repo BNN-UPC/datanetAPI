@@ -108,12 +108,16 @@ Thus, assuming perf is the performance_matrix of a sample, we may access to the 
 
 Data within traffic_matrix is structured in a similar way as in performance_matrix. The information is indexed by every src-dst pair. However, in this case the possible parameters of the inter-packet arrival time and packet size distributions depend on the types of distribution used. For instance, in case of an exponential inter-packet time distribution, the parameters of the first flow can be accessed using the following lines of code:
 
+```
 traffic_matrix[src,dst][′Flows′][′0′][‘TimeDistParams’][′EqLambda’]
 traffic_matrix[src,dst][′Flows′][′0′][‘TimeDistParams’][′AvgPktsLambda’]
 traffic_matrix[src,dst][′Flows′][′0′][‘TimeDistParams’][′ExpMaxFactor’]
+```
 
 Note: If the dataset only has one flow per path, then traffic and performance measurements over the aggregate traffic on a src-dst pair are the same as flow-level measurements on the only flow in that src-dst pair. This applies to performance_matrix and traffic_matrix. For instance:
+```
 performance _matrix[0,1][′AggInfo′][′AvgDelay′]) = performance _matrix[0,1][′Flows′][′0′][′AvgDelay′])
+```
 In the case of traffic_matrix, using information at the flow-level is recommended (e.g., traffic_matrix[0,1][′Flows′][′0′]), since it includes additional information not considered at the level of aggregate traffic.
 
 **routing_matrix**: This matrix describes the routing configuration. Particularly, it includes all the paths connecting every src-dst pair. Assuming route is a routing_matrix, “route[src,dst]” returns a list  describing the path from node src to node dst. Particularly, this list includes the IDs of the nodes that the path traverses. Note that all the flows of a src-dst pair follow the same path. 
