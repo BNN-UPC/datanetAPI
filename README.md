@@ -14,7 +14,7 @@ We provide below a simple code snippet to initialize the iterator object of the 
 
 ````python
 import datanetAPI
-reader = datanetAPI.DatanetAPI(< pathToDataset >,<IntensityRange >, [shuffle])
+reader = datanetAPI.DatanetAPI(<pathToDataset >,<IntensityRange>, [shuffle])
 it = iter(reader)
 for sample in it:
   <process sample code>
@@ -65,8 +65,8 @@ More in detail, every sample instance comprises the following attributes:
 
 Thus, assuming perf is the performance_matrix of a sample, we may access to the information as follows:
 * *perf[src,dst]*: dictionary with the performance measurements for the communication between node src and node dst. 
-* *perf[src,dst][′AggInfo′]*: dictionary with performance metrics on aggregate traffic between node src and node dst. Use *perf[src,dst][′AggInfo′][′<nameparam>′]*, where <nameparam> can be replaced by any of the keys described previously to obtain a specific performance metric (e.g., perf[0,1][′AggInfo′][′AvgDelay′]).
-* *perf[src,dst][′Flows′]*: flow-level performance metrics on traffic between node src and node dst. Use *perf[src,dst][′ Flows′][′<numflow>′]* and replace <numflow> by the number ID of the desired flow to obtain its information. Extend to *perf[src,dst][′Flows′][′<numflow>′][′<nameparam>′]* and replace <nameparam> by any of the keys described previously to obtain a specific performance measurement for a specific flow (e.g., perf[0,1][′Flows′][′0′][′ PktsDrop′]).
+* *perf[src,dst][′AggInfo′]*: dictionary with performance metrics on aggregate traffic between node src and node dst. Use *perf[src,dst][′AggInfo′][′\<nameparam\>′]*, where \<nameparam\> can be replaced by any of the keys described previously to obtain a specific performance metric (e.g., perf[0,1][′AggInfo′][′AvgDelay′]).
+* *perf[src,dst][′Flows′]*: flow-level performance metrics on traffic between node src and node dst. Use *perf[src,dst][′ Flows′][′\<numflow\>′]* and replace \<numflow\> by the number ID of the desired flow to obtain its information. Extend to *perf[src,dst][′Flows′][′\<numflow\>′][′\<nameparam\>′]* and replace \<nameparam\> by any of the keys described previously to obtain a specific performance measurement for a specific flow (e.g., perf[0,1][′Flows′][′0′][′ PktsDrop′]).
 
 
 
@@ -108,18 +108,19 @@ Thus, assuming perf is the performance_matrix of a sample, we may access to the 
 
 Data within traffic_matrix is structured in a similar way as in performance_matrix. The information is indexed by every src-dst pair. However, in this case the possible parameters of the inter-packet arrival time and packet size distributions depend on the types of distribution used. For instance, in case of an exponential inter-packet time distribution, the parameters of the first flow can be accessed using the following lines of code:
 
+```
 traffic_matrix[src,dst][′Flows′][′0′][‘TimeDistParams’][′EqLambda’]
 traffic_matrix[src,dst][′Flows′][′0′][‘TimeDistParams’][′AvgPktsLambda’]
 traffic_matrix[src,dst][′Flows′][′0′][‘TimeDistParams’][′ExpMaxFactor’]
+```
 
 Note: If the dataset only has one flow per path, then traffic and performance measurements over the aggregate traffic on a src-dst pair are the same as flow-level measurements on the only flow in that src-dst pair. This applies to performance_matrix and traffic_matrix. For instance:
-performance _matrix[0,1][′AggInfo′][′AvgDelay′]) = performance _matrix[0,1][′Flows′][′0′][′AvgDelay′])
-In the case of traffic_matrix, using information at the flow-level is recommended (e.g., traffic_matrix[0,1][′Flows′][′0′]), since it includes additional information not considered at the level of aggregate traffic.
+performance _matrix[0,1][′AggInfo′][′AvgDelay′]) = performance _matrix[0,1][′Flows′][′0′][′AvgDelay′]). In the case of traffic_matrix, using information at the flow-level is recommended (e.g., traffic_matrix[0,1][′Flows′][′0′]), since it includes additional information not considered at the level of aggregate traffic.
 
 **routing_matrix**: This matrix describes the routing configuration. Particularly, it includes all the paths connecting every src-dst pair. Assuming route is a routing_matrix, “route[src,dst]” returns a list  describing the path from node src to node dst. Particularly, this list includes the IDs of the nodes that the path traverses. Note that all the flows of a src-dst pair follow the same path. 
 
 **topology_object**: This is a Graph object form the Networkx library that provides information about the network topology. Particularly, this object encodes information on nodes and links (i.e., edges). Assuming g is a graph object of a sample instance, we can access the data as follows:
-* g.nodes: Returns a list with all the nodes IDs. 
+* g.nodes: Returns a list with all the node IDs. 
 * g.nodes[id]: Returns a dictionary with all the information parameters of the selected node (see more details of the node parameters Section 4.3).
 * g.edges: Returns a list of tuples describing the topology edges. Each tuple is described as (src node ID, dst node ID, link ID). The link ID is always ‘0’ as only one link for the same src-dst pair is supported at this moment.
 * g[src][dst][0]: Dictionary with the information parameters of the (directed) link between node src and node dst (see more details of the link parameters in Section 4.4).
