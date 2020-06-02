@@ -42,7 +42,7 @@ Every sample is a container including information about: (i) a network topology,
 More in detail, every sample instance comprises the following attributes:
 * *global_packets*: Number of packets transmitted in the network per time unit (packets/time unit).
 * *global_losses*: Packets lost in the network per time unit (packets/time unit).
-* *global_delay*: Average per-packet delay over all the packets transmitted in the network (time units).
+* *global_delay*: Average per-path per-packet delay over all the packets transmitted in the network (time units).
 * *maxAvgLambda*: This variable is used in our simulator to define the overall traffic intensity of the network scenario. Particularly, this is the maximum average traffic rate (bits/time unit) that a path can generate in the simulation scenario. Then, the average traffic rate of each src-dst path (lambda) is computed as 'maxAvgLambda' multiplied by a random value between 0 a 1. Note that, this traffic rate may be split into several flows sending traffic over the same src-dst path.
 * *performance_matrix*: Matrix with aggregate src-dst and flow-level performance meaurements (delay, jitter and loss) measured on each src-dst pair (see more details below). 
 * *traffic_matrix*: Matrix with the time and size distributions used to generate traffic for each src-dst pair (see more details below). 
@@ -53,13 +53,11 @@ More in detail, every sample instance comprises the following attributes:
 * ‘AggInfo’: dictionary with performance measurements for all aggregate flows between a specific [src,dst] pair. 
   * ‘PktsDrop’: packets dropped per time unit over the path [src,dst]. (packets/time unit)
   * ‘AvgDelay’: average per-packet delay over the packets transmitted on path [src,dst] (time units)
-  * ‘AvgLnDelay’: average of the neperian logarithm of the per-packet delay over the all packets transmitted on path [src, dst]. This is “avg(ln(packet_delay))”
   * ‘p10’, ‘p20’, ‘p50’, ‘p80’, ‘p90’: percentiles (10, 20, 50, 80, and 90) of the per-packet delay distribution on path [src,dst]. (time units)
   * ‘Jitter’: Variance of the per-packet delay over the packets transmitted on path [src,dst]. This is var(packet_delay)
 * ‘Flows’: List of dictionaries with performance measurements for each flow between node i and node j. Flows on each src-dst pair are indexed by a numerical ID (e.g., performance_matrix[0,1][‘Flows’][‘0’]). Note that all the flows of a src-dst pair follow the same path but may have different traffic distributions, thereby performance may vary between them. Each flow contains the following keys:
   * ‘PktsDrop’: packets dropped per time unit on the flow. (packets/time unit)
   * ‘AvgDelay’: average per-packet delay on the flow. (time units) 
-  * ‘AvgLnDelay’: average of the neperian logarithm of the per-packet delay over the all packets transmitted on the flow. i.e., “avg(ln(packet_delay))”
   * ‘p10’, ‘p20’, ‘p50’, ‘p80’, ‘p90’: percentiles (10, 20, 50, 80, and 90) of the per-packet delay distribution on the flow. (time units)
   * ‘Jitter’: variance of the per-packet delay (i.e., jitter) on the flow. i.e., var(packet_delay)
 
@@ -80,28 +78,12 @@ Thus, assuming perf is the performance_matrix of a sample, we may access to the 
   * ‘TimeDistParams’: dictionary with the parameters of the specific inter-packet arrival time distribution (see the parameters of each time distribution in Section 4.1). 
     * ‘EqLambda’: average bitrate per time unit (bits/time unit). 
     * ‘AvgPktsLambda’: average number of packets of average size generated per time unit (packets/time unit).
-    * ‘MinPktLambda’: minimum number of packets generated per time unit (packets/time unit). 
-    * ‘MaxPktLambda’: maximum number of packets generated per time unit (packets/time unit). 
-    * ‘StdDev’: Standard deviation of the interarrival time (used in the normal distribution). 
-    * ‘PktsLambdaOn’: Average packets per time unit generated during the ON period (packets/time unit).
-    * ‘AvgTOff’: Average duration of the OFF period. The duration of every OFF period is modeled with an exponential distribution of average = ‘AvgTOff’. (time units)
-    * ‘AvgTOn’: Average duration of the ON period. The duration of every ON period is modeled with an exponential distribution of average = ‘AvgTOn’. (time units)
     * ‘ExpMaxFactor’: Factor used to define an upper bound for exponential distributions. The upper bound is defined as: ‘ExpMaxFactor’* lambda of the exponentil
-    * ‘BurstGenLambda’: Burst generation rate of the flow (bursts/time unit). 
-    * ‘Bitrate’: Bitrate during a burst: (bits/time unit). 
-    * ‘ParetoMinSize’: Minimum number of bits in the burst (bits). 
-    * ‘ParetoMaxSize’: Maximum number of bits in the burst (bits).
-    * ‘ParetoAlfa’: Shape parameter (α) used in the Pareto distribution. 
   * ‘SizeDist’: packet size distribution used for the flow (see possible packet size distributions in Section 4.2).
   * ‘SizeDistParams’: dictionary with the parameters of the specific size distribution (see the parameters of each packet size distribution in Section 4.2). 
     * ‘AvgPktSize’: Average packet size (bits). 
-    * ‘MinSize’: Minimum packet size (bits). 
-    * ‘MaxSize’: Maximum packet size (bits). 
     * ‘PktSize1’: First packet size option (bits). 
     * ‘PktSize2’: Second packet size option (bits).
-    * ‘NumCandidates’: Number of different packets size considered. 
-    * ‘Size_i’: Size of the candidate packet i (bits).
-    * ‘Prob_i’: Probability to select candidate packet i (bits). 
   * ‘AvgBw’: average bandwidth for this flow (bits/time unit).
   * ‘PktsGen’: packets generated by this flow per time unit (packets/time unit).
   * ‘ToS’: Type of Service associated to this flow defined as an integer. 
@@ -120,7 +102,6 @@ In the case of traffic_matrix, using information at the flow-level is recommende
 
 **topology_object**: This is a Graph object form the Networkx library that provides information about the network topology. Particularly, this object encodes information on nodes and links (i.e., edges). Assuming g is a graph object of a sample instance, we can access the data as follows:
 * g.nodes: Returns a list with all the nodes IDs. 
-* g.nodes[id]: Returns a dictionary with all the information parameters of the selected node (see more details of the node parameters Section 4.3).
 * g.edges: Returns a list of tuples describing the topology edges. Each tuple is described as (src node ID, dst node ID, link ID). The link ID is always ‘0’ as only one link for the same src-dst pair is supported at this moment.
 * g[src][dst][0]: Dictionary with the information parameters of the (directed) link between node src and node dst (see more details of the link parameters in Section 4.4).
 
@@ -128,31 +109,14 @@ In the case of traffic_matrix, using information at the flow-level is recommende
 Our simulator considers the following inter-packet arrival time distributions for different flows in the network:
 
 * TimeDist.EXPONENTIAL_T: EqLambda, AvgPktsLambda, ExpMaxFactor 
-* TimeDist.DETERMINISTIC_T: EqLambda, AvgPktsLambda 
-* TimeDist.UNIFORM_T: EqLambda, MinPktLambda, MaxPktLambda
-* TimeDist.NORMAL_T: EqLambda, AvgPktsLambda, StdDev
-* TimeDist.ONOFF_T: EqLambda, PktsLambdaOn, AvgTOff, AvgTOn, ExpMaxFactor
-* TimeDist.PPBP_T: EqLambda, BurstGenLambda, Bitrate, ParetoMinSize, ParetoMaxSize, ParetoAlfa, ExpMaxFactor
 
 ### 4.2 Parameters of packet size distributions
 
 Our simulator considers the following packet size distributions for different flows generated in the network:
 
-* SizeDist.DETERMINISTIC_S: AvgPktSize 
-* SizeDist.UNIFORM_S: AvgPktSize, MinSize, MaxSize 
 * SizeDist.BINOMIAL_S: AvgPktSize, PktSize1, PktSize2 
-* SizeDist.GENERIC_S: AvgPktSize, NumCandidates, Size_i, Prob_i
 
-### 4.3 List of node parameters
-
-All the possible node parameters are listed below:
-
-* ‘levelsQoS’: Number of supported QoS classes
-* ‘queueSizes’: queue sizes (in number of packets) for each output queue of the node. Values are separated by commas. Each value is associated with a QoS queue.
-* ‘schedulingPolicy’: Policy used to serve the QoS queues. It may be one of the following ones: ‘FIFO’ (First-In, First-Out), ‘SP’ (Strict Priority), ‘WFQ’ (Weighted Fair Queuing), ‘DRR’ (Deficit Round Robin). If not specified, a ‘FIFO’ policy is considered by default. 
-* ‘schedulingWeights’: List of weights separated by commas associated to each QoS queue. Used only in the WFQ and DRR scheduling policies.
-
-### 4.4 List of link parameters
+### 4.3 List of link parameters
 
 All the possible node parameters are listed below:
 
