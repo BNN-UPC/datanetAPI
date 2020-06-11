@@ -758,7 +758,7 @@ class DatanetAPI:
             new_traffic_row = []
             for dst_node in range (netSize):
                 offset_t = (src_node * netSize + dst_node)*3
-                offset_d = offset + (src_node * netSize + dst_node)*7
+                offset_d = offset + (src_node * netSize + dst_node)*8
                 pcktsGen = float(r[offset_t + 1])
                 pcktsDrop = float(r[offset_t + 2])
                 pcktsDelay = float(r[offset_d])
@@ -766,13 +766,14 @@ class DatanetAPI:
                 dict_result_srcdst = {}
                 dict_result_agg = {
                     'PktsDrop':numpy.round(pcktsDrop/sim_time,6),
-                    "AvgDelay":pcktsDelay, 
-                    "p10":float(r[offset_d + 1]), 
-                    "p20":float(r[offset_d + 2]), 
-                    "p50":float(r[offset_d + 3]), 
-                    "p80":float(r[offset_d + 4]), 
-                    "p90":float(r[offset_d + 5]), 
-                    "Jitter":float(r[offset_d + 6])}
+                    "AvgDelay":pcktsDelay,
+                    "AvgLnDelay":float(r[offset_d + 1]),
+                    "p10":float(r[offset_d + 2]), 
+                    "p20":float(r[offset_d + 3]), 
+                    "p50":float(r[offset_d + 4]), 
+                    "p80":float(r[offset_d + 5]), 
+                    "p90":float(r[offset_d + 6]), 
+                    "Jitter":float(r[offset_d + 7])}
                 
                 if (src_node != dst_node):
                     globalPackets += pcktsGen
@@ -786,16 +787,16 @@ class DatanetAPI:
                     # Results:
                     dict_result_tmp = {}
                     offset_tf = (src_node * netSize * numFlows + dst_node * numFlows + flow)*3
-                    offset_df = offset_f + (src_node * netSize * numFlows + dst_node * numFlows + flow)*7
+                    offset_df = offset_f + (src_node * netSize * numFlows + dst_node * numFlows + flow)*8
                     dict_result_tmp = {
                         'PktsDrop':numpy.round(float(f[offset_tf + 2])/sim_time,6), 
-                        "AvgDelay":float(f[offset_df]), 
-                        "p10":float(f[offset_df + 1]), 
-                        "p20":float(f[offset_df + 2]), 
-                        "p50":float(f[offset_df + 3]), 
-                        "p80":float(f[offset_df + 4]), 
-                        "p90":float(f[offset_df + 5]), 
-                        "Jitter":float(f[offset_df + 6])}
+                        "AvgLnDelay":float(r[offset_df + 1]),
+                        "p10":float(r[offset_df + 2]), 
+                        "p20":float(r[offset_df + 3]), 
+                        "p50":float(r[offset_df + 4]), 
+                        "p80":float(r[offset_df + 5]), 
+                        "p90":float(r[offset_df + 6]), 
+                        "Jitter":float(r[offset_df + 7])}
                     lst_result_flows.append(dict_result_tmp)
                     # Traffic:
                     dict_traffic = {}
