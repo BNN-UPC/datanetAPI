@@ -304,7 +304,7 @@ class Sample:
 
         """
         if dst in self.topology_object[src]:
-            cap = float(self.topology_object[src][dst][0]['bandwidth'])
+            cap = float(self.topology_object[src][dst][0]['bandwidth'][:-3])*1000
         else:
             cap = -1
             
