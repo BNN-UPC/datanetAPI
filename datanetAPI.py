@@ -636,6 +636,7 @@ class DatanetAPI:
         0 if the file does not fulfill the user-defined intensity requirements.
 
         """
+        return(1)
         
         aux = file.split('_')
         aux = aux[2]
