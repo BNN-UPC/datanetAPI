@@ -14,13 +14,13 @@ We provide below a simple code snippet to initialize the iterator object of the 
 
 ````python
 import datanetAPI
-reader = datanetAPI.DatanetAPI(< pathToDataset >,<IntensityRange >)
+reader = datanetAPI.DatanetAPI(< pathToDataset >,<shuffle>)
 it = iter(reader)
 for sample in it:
   <process sample code>
 ````
 
-First of all, the user needs to download and import this Python library (line 1). Then, an instance of datanetAPI can be initialized (line 2), where pathToDataset should point to the root directory of the dataset to be processed. Note that this dataset should be uncompressed in advance. IntensityRange is a Python list of integers that enables to filter only samples within a traffic intensity range. Thus, the user can specify: (i) a single value, if a specific intensity is desired, or (ii) a list with two values, that will be considered respectively as the lower and upper bounds of a range of intensities desired (e.g., IntensityRange = [800 1200] will return only the samples with traffic intensity from 800 to 1200). In a typical case, IntensityRange should be an empty list (i.e., IntensityRange = [ ]), then the iterator object will return all the samples of the dataset. Afterwards, the iterator object can be created (line 3).
+First of all, the user needs to download and import this Python library (line 1). Then, an instance of datanetAPI can be initialized (line 2), where pathToDataset should point to the root directory of the dataset to be processed. Note that this dataset should be uncompressed in advance. Shuffle is a boolean that by default is 'false' and indicates if the sample files should be shuffled before being processed. Then the iterator object will return all the samples of the dataset. Afterwards, the iterator object can be created (line 3).
 Once the iterator object is created, samples can be sequentially extracted using a “for” loop (line 4). 
 
 Alternatively, the next(it) method can be used to read only the next sample. This enables, for instance, read only “n” samples from the dataset using:
@@ -43,7 +43,6 @@ More in detail, every sample instance comprises the following attributes:
 * *global_packets*: Number of packets transmitted in the network per time unit (packets/time unit).
 * *global_losses*: Packets lost in the network per time unit (packets/time unit).
 * *global_delay*: Average per-path per-packet delay over all the packets transmitted in the network (time units).
-* *maxAvgLambda*: This variable is used in our simulator to define the overall traffic intensity of the network scenario. Particularly, this is the maximum average traffic rate (bits/time unit) that a path can generate in the simulation scenario. Then, the average traffic rate of each src-dst path (lambda) is computed as 'maxAvgLambda' multiplied by a random value between 0 a 1. Note that, this traffic rate may be split into several flows sending traffic over the same src-dst path.
 * *performance_matrix*: Matrix with aggregate src-dst and flow-level performance meaurements (delay, jitter and loss) measured on each src-dst pair (see more details below). 
 * *traffic_matrix*: Matrix with the time and size distributions used to generate traffic for each src-dst pair (see more details below). 
 * *routing_matrix*: Matrix with the paths to connect every src-dst pair (see more details below).
@@ -65,8 +64,6 @@ Thus, assuming perf is the performance_matrix of a sample, we may access to the 
 * *perf[src,dst]*: dictionary with the performance measurements for the communication between node src and node dst. 
 * *perf[src,dst][′AggInfo′]*: dictionary with performance metrics on aggregate traffic between node src and node dst. Use *perf[src,dst][′AggInfo′][′<nameparam>′]*, where <nameparam> can be replaced by any of the keys described previously to obtain a specific performance metric (e.g., perf[0,1][′AggInfo′][′AvgDelay′]).
 * *perf[src,dst][′Flows′]*: flow-level performance metrics on traffic between node src and node dst. Use *perf[src,dst][′ Flows′][′<numflow>′]* and replace <numflow> by the number ID of the desired flow to obtain its information. Extend to *perf[src,dst][′Flows′][′<numflow>′][′<nameparam>′]* and replace <nameparam> by any of the keys described previously to obtain a specific performance measurement for a specific flow (e.g., perf[0,1][′Flows′][′0′][′ PktsDrop′]).
-
-
 
 
 **traffic_matrix:** This matrix indexes traffic-related information at the level of src-dst pairs. Similarly to performance_matrix, it provides traffic information at two levels of granularity: (i) for all aggregate flows on each src-dst pair, and (ii) for every flow individually. Every element of this matrix (i.e., traffic_matrix[src,dst]) contains a dictionary with the following keys:
