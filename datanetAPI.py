@@ -569,7 +569,6 @@ class DatanetAPI:
         return (MatrixPath)
 
     def _generate_graphs_dic(self, path):
-        print(path)
         """
         Return a dictionary with networkx objects generated from the GML
         files found in path
@@ -590,7 +589,6 @@ class DatanetAPI:
         for topology_file in os.listdir(path):
             G = networkx.read_gml(path+"/"+topology_file, destringizer=int)
             graphs_dic[topology_file] = G
-            print(topology_file)
         
         return graphs_dic
 
@@ -690,6 +688,7 @@ class DatanetAPI:
                 print ("Error: No graphs found in directory "+root)
                 exit()
             routings_dic[root] = {}
+            files.sort()
             # Extend the list of files to process
             tuple_files.extend([(root, f) for f in files if f.endswith("tar.gz")])
 
