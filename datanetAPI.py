@@ -113,12 +113,15 @@ class Sample:
     traffic_matrix = None
     routing_matrix = None
     topology_object = None
+    links_performance = None
     
+    data_set_file = None
     _results_line = None
     _traffic_line = None
     _input_files_line = None
     _status_line = None
     _flowresults_line = None
+    _link_usage_line = None
     _routing_file = None
     _graph_file = None
     
@@ -312,6 +315,37 @@ class Sample:
             cap = -1
             
         return cap
+    
+    def get_links_performance(self):
+        """
+        Returns the links_performance object of this Sample instance.
+        """
+        
+        return self.links_performance
+    
+    def get_srcdst_link_performance(self, src, dst):
+        """
+        
+
+        Parameters
+        ----------
+        src : int
+            Source node.
+        dst : int
+            Destination node.
+
+        Returns
+        -------
+        Dictionary with the performance metrics of the link
+        None if no link exist between src and dst
+
+        """
+        res = None
+        
+        if dst in self.links_performance[src]:
+            res = self.links_performance[src][dst] 
+        
+        return res
         
         
     def _set_data_set_file_name(self,file):
@@ -534,8 +568,8 @@ class DatanetAPI:
                 port = G[node][destination][0]['port']
                 node_port_dst[node][port] = destination
         return(node_port_dst)
-
-    def _create_routing_matrix(self, G,routing_file):
+    
+    def _create_routing_matrix_from_dst_routing_file(self, G, routing_file):
         """
 
         Parameters
@@ -543,7 +577,8 @@ class DatanetAPI:
         G : graph
             Graph representing the network.
         routing_file : str
-            File where the information about routing is located.
+            File where the information about routing is located. The file is a 
+            destination routing file.
 
         Returns
         -------
@@ -566,6 +601,68 @@ class DatanetAPI:
                     path.append(next_node)
                     node = next_node
                 MatrixPath[src][dst] = path
+        return (MatrixPath)
+    
+    def _create_routing_matrix_from_src_routing_dir(self, G, src_routing_dir):
+        """
+
+        Parameters
+        ----------
+        G : graph
+            Graph representing the network.
+        src_routing_dir : str
+            Directory where we found the routing filesFile. One for each src node. 
+
+        Returns
+        -------
+        MatrixPath : NxN Matrix
+            Matrix where each cell [i,j] contains the path to go from node
+            i to node j.
+
+        """
+        
+        netSize = G.number_of_nodes()
+        node_port_dst = self._getRoutingSrcPortDst(G)
+        src_R = []
+        for i in range(netSize):
+            routing_file = os.path.join(src_routing_dir,"Routing_src_"+str(i)+".txt")
+            src_R.append(self._readRoutingFile(routing_file, netSize))
+        MatrixPath = numpy.empty((netSize, netSize), dtype=object)
+        for src in range (0,netSize):
+            R = src_R[src]
+            for dst in range (0,netSize):
+                node = src
+                path = [node]
+                while (R[node][dst] != -1):
+                    out_port = R[node][dst];
+                    next_node = node_port_dst[node][out_port]
+                    path.append(next_node)
+                    node = next_node
+                MatrixPath[src][dst] = path
+        return (MatrixPath)
+
+    def _create_routing_matrix(self, G,routing_file):
+        """
+
+        Parameters
+        ----------
+        G : graph
+            Graph representing the network.
+        routing_file : str
+            File where the information about routing is located.
+
+        Returns
+        -------
+        MatrixPath : NxN Matrix
+            Matrix where each cell [i,j] contains the path to go from node
+            i to node j.
+
+        """
+        if (os.path.isfile(routing_file)):
+            MatrixPath = self._create_routing_matrix_from_dst_routing_file(G,routing_file)
+        elif(os.path.isdir(routing_file)):
+            MatrixPath = self._create_routing_matrix_from_src_routing_dir(G,routing_file)
+        
         return (MatrixPath)
 
     def _generate_graphs_dic(self, path):
@@ -593,6 +690,34 @@ class DatanetAPI:
             print(topology_file)
         
         return graphs_dic
+    
+    def _graph_links_update(self,G,file):
+        """
+        Updates the graph with the link information of the file
+        
+        Parameters
+        ----------
+        G : graph
+            Graph object to be updated
+        file: str
+            file name that contains the information of the links to be modified: src;dst;bw (bps)
+            
+        Returns
+        -------
+        None
+        
+        """
+        
+        try:
+            fd = open(file,"r")
+        except:
+            print ("ERROR: %s not exists" % (file))
+            exit(-1)
+        
+        for line in fd:
+            aux = line.split(";")
+            G[int(aux[0])][int(aux[1])][0]["bandwidth"] = aux[2]
+            
 
     def _generate_routings_dic(self, path,G):
         """
@@ -603,6 +728,7 @@ class DatanetAPI:
         ----------
         path : str
             Direcotory where the routing files are located.
+        G : graph
  
         Returns
         -------
@@ -690,12 +816,12 @@ class DatanetAPI:
                 print ("Error: No graphs found in directory "+root)
                 exit()
             routings_dic[root] = {}
+            files.sort()
             # Extend the list of files to process
             tuple_files.extend([(root, f) for f in files if f.endswith("tar.gz")])
 
         if self.shuffle:
             random.Random(1234).shuffle(tuple_files)
-        
         ctr = 0
         for root, file in tuple_files:
             if (len(self.intensity_values) == 0): feasibility_of_file = 2
@@ -713,6 +839,11 @@ class DatanetAPI:
                         flowresults_file = tar.extractfile(dir_info.name+"/flowSimulationResults.txt")
                     else:
                         flowresults_file = None
+                    if (dir_info.name+"/linkUsage.txt" in tar.getnames()):
+                        link_usage_file = tar.extractfile(dir_info.name+"/linkUsage.txt")
+                    else:
+                        link_usage_file = None
+
                     while(True):
                         s = Sample()
                         s._set_data_set_file_name(os.path.join(root, file))
@@ -721,10 +852,10 @@ class DatanetAPI:
                         s._traffic_line = traffic_file.readline().decode()[:-1]
                         if (flowresults_file):
                             s._flowresults_line = flowresults_file.readline().decode()[:-2]
-                        else:
-                            s._flowresults_line = None
                         s._status_line = status_file.readline().decode()[:-1]
                         s._input_files_line = input_files.readline().decode()[:-1]
+                        if (link_usage_file):
+                            s._link_usage_line = link_usage_file.readline().decode()[:-1]
                         
                         if (len(s._results_line) == 0) or (len(s._traffic_line) == 0):
                             break
@@ -743,6 +874,9 @@ class DatanetAPI:
                         s._graph_file = used_files[1]
                         s._routing_file = used_files[2]
                         g = graphs_dic[root][s._graph_file]
+                        if (len(used_files) == 4):
+                            self._graph_links_update(g,os.path.join(root,"links_bw",used_files[3]))
+                        
                         # XXX We considerer that all graphs using the same routing file have the same topology
                         if (s._routing_file in routings_dic[root]):
                             routing_matrix = routings_dic[root][s._routing_file]
@@ -750,12 +884,13 @@ class DatanetAPI:
                             routing_matrix = self._create_routing_matrix(g,os.path.join(root,"routings",s._routing_file))
                             routings_dic[root][s._routing_file] = routing_matrix
                         
-                        self._process_flow_results_traffic_line(s._results_line, s._traffic_line, s._flowresults_line, s._status_line, s)
                         s._set_routing_matrix(routing_matrix)
                         s._set_topology_object(g)
+                        self._process_flow_results_traffic_line(s._results_line, s._traffic_line, s._flowresults_line, s._status_line, s)
+                        self._process_link_usage_line(s._link_usage_line,s)
                         it +=1
                         yield s
-                except GeneratorExit:
+                except (GeneratorExit,SystemExit) as e:
                     raise
                 except:
                     traceback.print_exc()
@@ -993,4 +1128,35 @@ class DatanetAPI:
             return -1
         return 0
 
+    def _process_link_usage_line(self, lline,s):
+        """
 
+        Parameters
+        ----------
+        lline : str
+            Last line read in the links usage file.
+        s : Sample
+            Instance of Sample associated with the current iteration.
+
+        Returns
+        -------
+        None.
+
+        """
+        # link_stat is an array of the nodes containing a dictionary with the adjacent nodes. 
+        # Each adjacent node contains a dictionary with performance metrics
+        links_stat = []
+        l = lline.split(";")
+        netSize = s.get_network_size()
+        
+        for i in range(netSize):
+            links_stat.append({})
+            for j in range(netSize):
+                if (l[i*netSize*2+j*2] == "-1"):
+                    continue
+                link_stat = {}
+                link_stat["utilization"] = float(l[i*netSize*2+j*2])
+                link_stat["loss"] = float(l[i*netSize*2+j*2+1])
+                links_stat[i][j] = link_stat
+        
+        s.links_performance = links_stat
