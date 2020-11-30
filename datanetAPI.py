@@ -21,6 +21,18 @@
 import os, tarfile, numpy, math, networkx, queue, random,traceback
 from enum import IntEnum
 
+import timeit
+
+class DatanetException(Exception):
+    """
+    Exceptions generated when processing dataset
+    """
+    def __init__(self, msg):
+        self.msg = msg
+    def __str__(self):
+        return self.msg
+
+
 class TimeDist(IntEnum):
     """
     Enumeration of the supported time distributions 
@@ -102,6 +114,10 @@ class Sample:
         source i and destination j.
     topology_object : 
         Network topology using networkx format.
+    links_performance: list-of-dict-of-dict data structure:
+        The outer list contain a dict-of-dict for each node. The first dict contain
+        the list of adjacents nodes and the last dict contain the parameters of the link.
+    
     """
     
     global_packets = None
@@ -320,6 +336,8 @@ class Sample:
         """
         Returns the links_performance object of this Sample instance.
         """
+        if (self.links_performance == None):
+            raise DatanetException("ERROR: The processed dataset doesn't have link performance data")
         
         return self.links_performance
     
@@ -340,6 +358,8 @@ class Sample:
         None if no link exist between src and dst
 
         """
+        if (self.links_performance == None):
+            raise DatanetException("ERROR: The processed dataset doesn't have link performance data")
         res = None
         
         if dst in self.links_performance[src]:
@@ -493,10 +513,6 @@ class DatanetAPI:
         ----------
         data_folder : str
             Folder where the dataset is stored.
-        dict_queue : Queue
-            Auxiliar data structures used to conveniently move information
-            between the file where they are read, and the matrix where they
-            are located.
         intensity_values : int or array [x, y]
             User-defined intensity values used to constrain the reading process
             to these/this value/range of values.
@@ -509,9 +525,56 @@ class DatanetAPI:
         """
         
         self.data_folder = data_folder
-        self.dict_queue = queue.Queue()
         self.intensity_values = intensity_values
         self.shuffle = shuffle
+        
+        self._all_tuple_files = []
+        self._selected_tuple_files = []
+        self._graphs_dic = {}
+        self._routings_dic = {}
+        for root, dirs, files in os.walk(self.data_folder):
+            if ("graphs" not in dirs or "routings" not in dirs):
+                continue
+            # Generate graphs dictionaries
+            self._graphs_dic[root] = self._generate_graphs_dic(os.path.join(root,"graphs"))
+            if (len(self._graphs_dic[root].keys()) == 0):
+                raise DatanetException ("ERROR: No graphs found in directory "+root)
+            self._routings_dic[root] = {}
+            files.sort()
+            # Extend the list of files to process
+            self._all_tuple_files.extend([(root, f) for f in files if f.endswith("tar.gz")])
+
+    def get_available_files(self):
+        """
+        Get a list of all the dataset files located in the indicated data folder
+        
+        Returns
+        -------
+        Array of tuples where each tuple is (root directory, filename)
+        
+        """
+        
+        return (self._all_tuple_files.copy())
+    
+    def set_files_to_process(self, tuple_files_lst):
+        """
+        Set the list of files to be processed by the iterator. The files should belong to
+        the list of tuples returned by get_available_files. 
+        
+        Parameters
+        ----------
+        tuple_files_lst: List of tuples
+            List of tuples where each tuple is (path to file, filename)
+        """
+        if not type(tuple_files_lst) is list:
+            raise DatanetException("ERROR: The argument of set_files_to_process should be a list of tuples -> [(root_dir,file),...]")
+        for tuple in tuple_files_lst:
+            if not type(tuple) is tuple or len(tuple) != 2:
+                raise DatanetException("ERROR: The argument of set_files_to_process should be a list of tuples -> [(root_dir,file),...]")
+            if (not tuple in self._all_tuple_files):
+                raise DatanetException("ERROR: Selected tupla not belong to the list of tuples returned by get_available_files()")
+        
+        self._selected_tuple_files = tuple_files_lst.copy()
 
     def _readRoutingFile(self, routing_file, netSize):
         """
@@ -802,21 +865,10 @@ class DatanetAPI:
         
         g = None
         
-        tuple_files = []
-        graphs_dic = {}
-        routings_dic = {}
-        for root, dirs, files in os.walk(self.data_folder):
-            if ("graphs" not in dirs or "routings" not in dirs):
-                continue
-            # Generate graphs dictionaries
-            graphs_dic[root] = self._generate_graphs_dic(os.path.join(root,"graphs"))
-            if (len(graphs_dic[root].keys()) == 0):
-                print ("Error: No graphs found in directory "+root)
-                exit()
-            routings_dic[root] = {}
-            files.sort()
-            # Extend the list of files to process
-            tuple_files.extend([(root, f) for f in files if f.endswith("tar.gz")])
+        if (len(self._selected_tuple_files) > 0):
+            tuple_files = self._selected_tuple_files
+        else:
+            tuple_files = self._all_tuple_files
 
         if self.shuffle:
             random.Random(1234).shuffle(tuple_files)
@@ -841,7 +893,6 @@ class DatanetAPI:
                         link_usage_file = tar.extractfile(dir_info.name+"/linkUsage.txt")
                     else:
                         link_usage_file = None
-
                     while(True):
                         s = Sample()
                         s._set_data_set_file_name(os.path.join(root, file))
@@ -871,30 +922,29 @@ class DatanetAPI:
                         used_files = s._input_files_line.split(';')
                         s._graph_file = used_files[1]
                         s._routing_file = used_files[2]
-                        g = graphs_dic[root][s._graph_file]
+                        g = self._graphs_dic[root][s._graph_file]
                         if (len(used_files) == 4):
                             self._graph_links_update(g,os.path.join(root,"links_bw",used_files[3]))
                         
                         # XXX We considerer that all graphs using the same routing file have the same topology
-                        if (s._routing_file in routings_dic[root]):
-                            routing_matrix = routings_dic[root][s._routing_file]
+                        if (s._routing_file in self._routings_dic[root]):
+                            routing_matrix = self._routings_dic[root][s._routing_file]
                         else:
                             routing_matrix = self._create_routing_matrix(g,os.path.join(root,"routings",s._routing_file))
-                            routings_dic[root][s._routing_file] = routing_matrix
+                            self._routings_dic[root][s._routing_file] = routing_matrix
                         
                         s._set_routing_matrix(routing_matrix)
                         s._set_topology_object(g)
                         self._process_flow_results_traffic_line(s._results_line, s._traffic_line, s._flowresults_line, s._status_line, s)
-                        self._process_link_usage_line(s._link_usage_line,s)
+                        if (s._link_usage_line):
+                            self._process_link_usage_line(s._link_usage_line,s)
                         it +=1
                         yield s
                 except (GeneratorExit,SystemExit) as e:
                     raise
                 except:
-                    traceback.print_exc()
-                    print ("Error in the file:" +file)
-                    print ("     iteration: " +str(it))
-                    exit()
+                    #traceback.print_exc()
+                    print ("Error in the file: %s   iteration: %d" % (file,it))
                     
             else:
                 continue
@@ -1154,7 +1204,7 @@ class DatanetAPI:
                     continue
                 link_stat = {}
                 link_stat["utilization"] = float(l[i*netSize*2+j*2])
-                link_stat["loss"] = float(l[i*netSize*2+j*2+1])
+                link_stat["loses"] = float(l[i*netSize*2+j*2+1])
                 links_stat[i][j] = link_stat
-        
+#         
         s.links_performance = links_stat

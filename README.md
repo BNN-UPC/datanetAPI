@@ -29,6 +29,9 @@ Alternatively, the next(it) method can be used to read only the next sample. Thi
 for i in range(n):
     sample = next(it)
 ````
+The DatanetAPI object also provides the following methods:
+* reader.get_available_files(): Return a list of all the dataset files located in the <pathToDataset> directory which is specified in the initialization of the object and its subdirectories. Each element of the list is a tuple containing the path of the file and the file itself.
+* reader.set_files_to_process(tuple_list): Specify a sublist of files to be processed by the iterator. The files should be a subset of the files obtained with get_available_files(). This function should always be used before creating the iterator.
 
 The next section describes in detail all the information that a sample object contains and some methods to extract it.
 
@@ -36,7 +39,7 @@ The next section describes in detail all the information that a sample object co
 
 This section describes how the data is structured within a sample object.
 
-Every sample is a container including information about: (i) a network topology, (ii) parameters used to generate the traffic in our simulation tool, (iii) a routing configuration, and (iii) some measurements (delay, jitter and loss) measured in our simulator resulting from the network configuration (i.e., topology + traffic distribution + routing). All this information is provided for every source-destination pair of the network. Note that we consider only a path connecting every source-destination (src-dst) pair, however more than a src-dst flow can traverse the same path and performance measurements can be individually obtained for each flow. Also, note that our simulator implements a method that stops the simulation when it detects that the network reaches a stationary state. Consequently, the simulation time to generate each sample is different. This is why we provide measurements such as generated or dropped packets as numbers relative to time units (e.g., packets/time unit)
+Every sample is a container including information about: (i) a network topology, (ii) parameters used to generate the traffic in our simulation tool, (iii) a routing configuration, (iv) some measurements (delay, jitter and loss) measured in our simulator resulting from the network configuration (i.e., topology + traffic distribution + routing) and (v) link performance metrics. All this information is provided for every source-destination pair of the network. Note that we consider only a path connecting every source-destination (src-dst) pair, however more than a src-dst flow can traverse the same path and performance measurements can be individually obtained for each flow. Also, note that our simulator implements a method that stops the simulation when it detects that the network reaches a stationary state. Consequently, the simulation time to generate each sample is different. This is why we provide measurements such as generated or dropped packets as numbers relative to time units (e.g., packets/time unit)
 
 
 More in detail, every sample instance comprises the following attributes:
@@ -48,6 +51,7 @@ More in detail, every sample instance comprises the following attributes:
 * *traffic_matrix*: Matrix with the time and size distributions used to generate traffic for each src-dst pair (see more details below). 
 * *routing_matrix*: Matrix with the paths to connect every src-dst pair (see more details below).
 * *topology_object*: It uses a Graph object from the Networkx library including topology-related information at the node and link-level (see more details below).
+* *links_performance*: list of dictionaries with the performance metrics associated with each link. (see more details below). Not all datasets contain this information. In that case, this object is None
 
 **performance_matrix**: This is a matrix that indexes performance measurements at the level of src-dst pairs. Particularly, it considers that more than one flow can be exchanged on each src-dst pair. Hence, it provides performance measurements at two levels of granularity: (i) for all aggregate flows on each src-dst pair, and (ii) for every flow individually. Every element of this matrix (i.e., performance_matrix[src,dst]) contains a dictionary with the following keys: 
 * ‘AggInfo’: dictionary with performance measurements for all aggregate flows between a specific [src,dst] pair. 
@@ -67,8 +71,6 @@ Thus, assuming perf is the performance_matrix of a sample, we may access to the 
 * *perf[src,dst]*: dictionary with the performance measurements for the communication between node src and node dst. 
 * *perf[src,dst][′AggInfo′]*: dictionary with performance metrics on aggregate traffic between node src and node dst. Use *perf[src,dst][′AggInfo′][′\<nameparam\>′]*, where \<nameparam\> can be replaced by any of the keys described previously to obtain a specific performance metric (e.g., perf[0,1][′AggInfo′][′AvgDelay′]).
 * *perf[src,dst][′Flows′]*: flow-level performance metrics on traffic between node src and node dst. Use *perf[src,dst][′ Flows′][′\<numflow\>′]* and replace \<numflow\> by the number ID of the desired flow to obtain its information. Extend to *perf[src,dst][′Flows′][′\<numflow\>′][′\<nameparam\>′]* and replace \<nameparam\> by any of the keys described previously to obtain a specific performance measurement for a specific flow (e.g., perf[0,1][′Flows′][′0′][′ PktsDrop′]).
-
-
 
 
 **traffic_matrix:** This matrix indexes traffic-related information at the level of src-dst pairs. Similarly to performance_matrix, it provides traffic information at two levels of granularity: (i) for all aggregate flows on each src-dst pair, and (ii) for every flow individually. Every element of this matrix (i.e., traffic_matrix[src,dst]) contains a dictionary with the following keys:
@@ -125,6 +127,14 @@ performance _matrix[0,1][′AggInfo′][′AvgDelay′]) = performance _matrix[0
 * g.edges: Returns a list of tuples describing the topology edges. Each tuple is described as (src node ID, dst node ID, link ID). The link ID is always ‘0’ as only one link for the same src-dst pair is supported at this moment.
 * g[src][dst][0]: Dictionary with the information parameters of the (directed) link between node src and node dst (see more details of the link parameters in Section 4.4).
 
+**links_performance**: This object is structured as a list of dictionaries of dictionaries object and contains the performance metrics of the links. The outer list contains a dictionary of dictionaries for each node. The first dictionary contains the list of adjacents nodes and the last dictionary contain the performance metrics of the link. The performance dictionary contains the following keys:
+* ‘utilization’: Tan per one of the average utilization of the link.
+* ‘loses’: Tan per one of the average packets lost in the link.
+
+Thus, assuming lperf is the links performance object of a sample, we may access the information as follows:
+* lperf[src][dst]: dictionary with the performance measurements of the link [src][dst]. If the dst node is not adjacent to src node. A KeyError exception will be produced.
+* lperf[src][dst][<nameparam>]: Read the <nameparam> parameter of the link.
+
 ### 4.1 Parameters of time distributions
 Our simulator considers the following inter-packet arrival time distributions for different flows in the network:
 
@@ -180,4 +190,7 @@ The API includes methods to obtain more easily some information from a sample ob
 * s.get_srcdst_link_bandwidth(src,dst): Returns the bandwidth in bits/time unit of the link between node src and node dst in case there is a link between both nodes, otherwise it returns -1.
 * s.get_node_properties(node_id): Returns a dictionary with the parameters of the node identified by node_id if it exists. Otherwise it returns ‘None’. 
 * s.get_link_properties(src,dst): Returns a dictionary with the parameters of the link between node src and node dst if they are connected by a link. Otherwise it returns ‘None’.
+* s.get_links_performance(): Returns the links performance object. Assuming the object is denoted by lp, the performance metrics stored for a specific link can be accessed using lp[src][dst] . See more details about the link_performance in the previous section.
+* s.get_srcdst_link_performance(src,dst): Directly returns a dictionary with the link performance metrics of the src-dst link or None if the link doesn’t exist. See more details about the link_performance in the previous section.
+
 
