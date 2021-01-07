@@ -1,4 +1,8 @@
 # DataNet API Documentation
+
+#### Contact mailing list: kdn-users@knowledgedefinednetworking.org
+(You first need to subscribe at: https://mail.knowledgedefinednetworking.org/cgi-bin/mailman/listinfo/kdn-users).
+
 ## 1 Introduction
 This Python API is intended to provide users with a simple and intuitive way to access the information contained in the associated datasets. Following a user-oriented approach, the API aims to abstract users from the internal details of our datasets, thus making much easier extracting the information.
 
