@@ -777,7 +777,7 @@ class DatanetAPI:
         
         for line in fd:
             aux = line.split(";")
-            G[int(aux[0])][int(aux[1])][0]["bandwidth"] = aux[2]
+            G[int(aux[0])][int(aux[1])][0]["bandwidth"] = int(aux[2])
             
 
     def _generate_routings_dic(self, path,G):
@@ -943,7 +943,7 @@ class DatanetAPI:
                 except (GeneratorExit,SystemExit) as e:
                     raise
                 except:
-                    #traceback.print_exc()
+                    traceback.print_exc()
                     print ("Error in the file: %s   iteration: %d" % (file,it))
                     
             else:
@@ -998,7 +998,7 @@ class DatanetAPI:
                 dict_result_srcdst = {}
                 aux_agg_ = r[j].split(',')
                 aux_agg = list(map(float, aux_agg_))
-                dict_result_agg = {'PktsDrop':aux_agg[2], "AvgDelay":aux_agg[3], "AvgLnDelay":aux_agg[4], "p10":aux_agg[5], "p20":aux_agg[6], "p50":aux_agg[7], "p80":aux_agg[8], "p90":aux_agg[9], "Jitter":aux_agg[10]}
+                dict_result_agg = {'PktsDrop':aux_agg[2], "AvgDelay":aux_agg[3], "AvgLnDelay":aux_agg[4], "p10":aux_agg[5], "p20":aux_agg[6], "p50":aux_agg[7], "p80":aux_agg[8], "p90":aux_agg[9], "Jitter":aux_agg[10], "AvgQueueDelay":aux_agg[11]}
                 
                 lst_result_flows = []
                 aux_result_flows = f[j].split(':')
@@ -1007,7 +1007,7 @@ class DatanetAPI:
                     tmp_result_flow = flow.split(',')
                     tmp_result_flow = list(map(float, tmp_result_flow))
                     q_flows.put([tmp_result_flow[0], tmp_result_flow[1]])
-                    dict_result_tmp = {'PktsDrop':tmp_result_flow[2], "AvgDelay":tmp_result_flow[3], "AvgLnDelay":tmp_result_flow[4], "p10":tmp_result_flow[5], "p20":tmp_result_flow[6], "p50":tmp_result_flow[7], "p80":tmp_result_flow[8], "p90":tmp_result_flow[9], "Jitter":tmp_result_flow[10]}
+                    dict_result_tmp = {'PktsDrop':tmp_result_flow[2], "AvgDelay":tmp_result_flow[3], "AvgLnDelay":tmp_result_flow[4], "p10":tmp_result_flow[5], "p20":tmp_result_flow[6], "p50":tmp_result_flow[7], "p80":tmp_result_flow[8], "p90":tmp_result_flow[9], "Jitter":tmp_result_flow[10], "AvgQueueDelay":aux_agg[11]}
                     lst_result_flows.append(dict_result_tmp)
                 
                 dict_traffic_srcdst = {}
@@ -1200,11 +1200,20 @@ class DatanetAPI:
         for i in range(netSize):
             links_stat.append({})
             for j in range(netSize):
-                if (l[i*netSize*2+j*2] == "-1"):
+                params = l[i*netSize+j].split(",")
+                if (params[0] == "-1"):
                     continue
                 link_stat = {}
-                link_stat["utilization"] = float(l[i*netSize*2+j*2])
-                link_stat["loses"] = float(l[i*netSize*2+j*2+1])
+                link_stat["utilization"] = float(params[0])
+                link_stat["loses"] = float(params[1])
+                num_qos_queues = int((len(params)-2)/3)
+                qos_queue_stat_lst = []
+                for q in range(num_qos_queues):
+                    qos_queue_stat = {"loses":float(params[2+q*3]),
+                                      "avgQueueOcupation":float(params[2+q*3+1]),
+                                      "maxQueueOcupation":float(params[2+q*3+2])}
+                    qos_queue_stat_lst.append(qos_queue_stat)
+                link_stat["qos_queues_stat"] = qos_queue_stat_lst;
                 links_stat[i][j] = link_stat
 #         
         s.links_performance = links_stat
