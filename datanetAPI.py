@@ -21,7 +21,7 @@
 import os, tarfile, numpy, math, networkx, queue, random,traceback
 from enum import IntEnum
 
-import timeit
+import time
 
 class DatanetException(Exception):
     """
@@ -130,6 +130,9 @@ class Sample:
     routing_matrix = None
     topology_object = None
     links_performance = None
+    
+    num_bin = 0
+    _sim_time = 0
     
     data_set_file = None
     _results_line = None
@@ -525,7 +528,18 @@ class DatanetAPI:
         """
         
         self.data_folder = data_folder
-        self.intensity_values = intensity_values
+        if (len(intensity_values) == 0):
+            self.check_intensity = False
+        elif (len(intensity_values) == 1):
+            self.check_intensity = True
+            self.intensity_values = [intensity_values,intensity_values]
+        elif (len(intensity_values) == 2):
+            self.check_intensity = True
+            self.intensity_values = list(intensity_values)
+            self.intensity_values.sort()
+        else:
+            print("ERROR: intensity_values should have 0, 1 or 2 elements")
+            
         self.shuffle = shuffle
         
         self._all_tuple_files = []
@@ -804,52 +818,26 @@ class DatanetAPI:
             routings_dic[routing_file] = R
         
         return routings_dic
-
-    def _check_intensity(self, file):
+    
+    def _get_iterations_range(self, file):
         """
         
 
         Parameters
         ----------
         file : str
-            Name of the data file that needs to be filtered by intensity.
+            Name of the data file.
 
         Returns
         -------
-        2 if the range of intensities treates in the file satisfies the needs
-        of the user.
-        1 if there may be lines in the file that do not fulfill the user
-        requirements.
-        0 if the file does not fulfill the user-defined intensity requirements.
+        A tupla with the first and last iterations
 
         """
+        camps = file.split("_")
+        first_it = int(camps[-2])
+        last_it = int(camps[-1][:-7])
         
-        aux = file.split('_')
-        aux = aux[2]
-        aux = aux.split('-')
-        aux = list(map(int, aux))
-#        User introduced range of intensities
-        if(len(self.intensity_values) > 1):
-            if(len(aux) > 1):
-                if(aux[0] >= self.intensity_values[0]) and (aux[1] <= self.intensity_values[1]):
-                    return 2
-                elif(aux[0] > self.intensity_values[1]) or (self.intensity_values[0] > aux[1]):
-                    return 0
-                else:
-                    return 1
-                    
-            else:
-                if(aux[0] >= self.intensity_values[0] and aux[0] <= self.intensity_values[1]):
-                    return 2
-                else: 
-                    return 0
-#        User introduced single intensity
-        elif (len(self.intensity_values) == 1):
-            if(len(aux) == 1 and self.intensity_values[0] == aux[0]):
-                return 2
-            return 0
-        else:
-            return 2
+        return (first_it,last_it)
 
     def __iter__(self):
         """
@@ -874,64 +862,76 @@ class DatanetAPI:
             random.Random(1234).shuffle(tuple_files)
         ctr = 0
         for root, file in tuple_files:
-            if (len(self.intensity_values) == 0): feasibility_of_file = 2
-            else: feasibility_of_file = self._check_intensity(file)
-            if(feasibility_of_file != 0):
-                try:
-                    it = 0 
-                    tar = tarfile.open(os.path.join(root, file), 'r:gz')
-                    dir_info = tar.next()
-                    results_file = tar.extractfile(dir_info.name+"/simulationResults.txt")
-                    traffic_file = tar.extractfile(dir_info.name+"/traffic.txt")
-                    status_file = tar.extractfile(dir_info.name+"/stability.txt")
-                    input_files = tar.extractfile(dir_info.name+"/input_files.txt")
+            try:
+                it = 0 
+                tar = tarfile.open(os.path.join(root, file), 'r:gz')
+                (first_it,last_it) = self._get_iterations_range(file)
+                dir_info = tar.next()
+                
+                status_file = tar.extractfile(dir_info.name+"/stability.txt")
+                input_files = tar.extractfile(dir_info.name+"/input_files.txt")
+                
+                for it in range(first_it,last_it+1):
+                    traffic_file = tar.extractfile(dir_info.name+"/traffic-"+str(it)+".txt")
+                    results_file = tar.extractfile(dir_info.name+"/simulationResults-"+str(it)+".txt")
                     if (dir_info.name+"/flowSimulationResults.txt" in tar.getnames()):
-                        flowresults_file = tar.extractfile(dir_info.name+"/flowSimulationResults.txt")
+                        flowresults_file = tar.extractfile(dir_info.name+"/flowSimulationResults-"+str(it)+".txt")
                     else:
                         flowresults_file = None
-                    if (dir_info.name+"/linkUsage.txt" in tar.getnames()):
-                        link_usage_file = tar.extractfile(dir_info.name+"/linkUsage.txt")
+                    if (dir_info.name+"/linkUsage-"+str(it)+".txt" in tar.getnames()):
+                        link_usage_file = tar.extractfile(dir_info.name+"/linkUsage-"+str(it)+".txt")
                     else:
                         link_usage_file = None
-                    while(True):
-                        s = Sample()
-                        s._set_data_set_file_name(os.path.join(root, file))
                         
-                        s._results_line = results_file.readline().decode()[:-2]
+                    input_files_line = input_files.readline().decode()[:-1]
+                    status_line = status_file.readline().decode()[:-1]
+                    if (not ";OK;" in status_line):
+                        print ("Removed iteration: "+status_line)
+                        continue;
+                    
+
+                    
+                    used_files = input_files_line.split(';')
+                    graph_file = used_files[1]
+                    routing_file = used_files[2]
+                    g = self._graphs_dic[root][graph_file]
+                    if (len(used_files) == 4):
+                        self._graph_links_update(g,os.path.join(root,"links_bw",used_files[3]))
+                    
+                    # XXX We considerer that all graphs using the same routing file have the same topology
+                    if (routing_file in self._routings_dic[root]):
+                        routing_matrix = self._routings_dic[root][routing_file]
+                    else:
+                        routing_matrix = self._create_routing_matrix(g,os.path.join(root,"routings",routing_file))
+                        self._routings_dic[root][routing_file] = routing_matrix
+                    
+                    num_bin = 0
+                    while (True):
+                        s = Sample()
+                        s.num_bin = num_bin
+                        num_bin += 1
+                        s._set_data_set_file_name(os.path.join(root, file))
                         s._traffic_line = traffic_file.readline().decode()[:-1]
+                        s._status_line = status_line
+                        s._input_files_line = input_files_line
+                        s._results_line = results_file.readline().decode()[:-2]
                         if (flowresults_file):
                             s._flowresults_line = flowresults_file.readline().decode()[:-2]
-                        s._status_line = status_file.readline().decode()[:-1]
-                        s._input_files_line = input_files.readline().decode()[:-1]
                         if (link_usage_file):
                             s._link_usage_line = link_usage_file.readline().decode()[:-1]
                         
-                        if (len(s._results_line) == 0) or (len(s._traffic_line) == 0):
+                        if (len(s._results_line) == 0 or len(s._traffic_line) == 0):
                             break
                         
-                        if (not ";OK;" in s._status_line):
-                            print ("Removed iteration: "+s._status_line)
-                            continue;
-                        
-                        if (feasibility_of_file == 1):
-                            ptr = s._traffic_line.find('|')
-                            specific_intensity = float(s._traffic_line[0:ptr])
+                        if (self.check_intensity):
+                            ptr1 = traffic_line.find(';')+1
+                            ptr2 = traffic_line.find('|',ptr1)
+                            specific_intensity = float(traffic_line[ptr1:ptr2])
                             if(specific_intensity < self.intensity_values[0]) or (specific_intensity > self.intensity_values[1]):
-                                continue
+                                break
                         
-                        used_files = s._input_files_line.split(';')
-                        s._graph_file = used_files[1]
-                        s._routing_file = used_files[2]
-                        g = self._graphs_dic[root][s._graph_file]
-                        if (len(used_files) == 4):
-                            self._graph_links_update(g,os.path.join(root,"links_bw",used_files[3]))
-                        
-                        # XXX We considerer that all graphs using the same routing file have the same topology
-                        if (s._routing_file in self._routings_dic[root]):
-                            routing_matrix = self._routings_dic[root][s._routing_file]
-                        else:
-                            routing_matrix = self._create_routing_matrix(g,os.path.join(root,"routings",s._routing_file))
-                            self._routings_dic[root][s._routing_file] = routing_matrix
+                        s._graph_file = graph_file
+                        s._routing_file = routing_file
                         
                         s._set_routing_matrix(routing_matrix)
                         s._set_topology_object(g)
@@ -940,11 +940,11 @@ class DatanetAPI:
                             self._process_link_usage_line(s._link_usage_line,s)
                         it +=1
                         yield s
-                except (GeneratorExit,SystemExit) as e:
-                    raise
-                except:
-                    traceback.print_exc()
-                    print ("Error in the file: %s   iteration: %d" % (file,it))
+            except (GeneratorExit,SystemExit) as e:
+                raise
+            except:
+                traceback.print_exc()
+                print ("Error in the file: %s   iteration: %d" % (file,it))
                     
             else:
                 continue
@@ -984,21 +984,23 @@ class DatanetAPI:
         else:
             f = r
         
-        ptr = tline.find('|')
-        t = tline[ptr+1:].split(';')
-        s.maxAvgLambda = float(tline[:ptr])
+        ptr1 = tline.find(';')+1
+        ptr2 = tline.find('|',ptr1)
+        t = tline[ptr2+1:].split(';')
+        s.maxAvgLambda = float(tline[ptr1:ptr2])
         sim_time  = float(sline.split(';')[0])
-        
+        s._sim_time = sim_time
+        net_size = s.get_network_size()
         m_result = []
         m_traffic = []
-        for i in range(0,len(r), int(math.sqrt(len(r)))):
+        for i in range(0,len(r), net_size):
             new_result_row = []
             new_traffic_row = []
-            for j in range(i, i+int(math.sqrt(len(r)))):
+            for j in range(i, i + net_size):
                 dict_result_srcdst = {}
                 aux_agg_ = r[j].split(',')
                 aux_agg = list(map(float, aux_agg_))
-                dict_result_agg = {'PktsDrop':aux_agg[2], "AvgDelay":aux_agg[3], "AvgLnDelay":aux_agg[4], "p10":aux_agg[5], "p20":aux_agg[6], "p50":aux_agg[7], "p80":aux_agg[8], "p90":aux_agg[9], "Jitter":aux_agg[10], "AvgQueueDelay":aux_agg[11]}
+                dict_result_agg = {'PktsDrop':aux_agg[2], "AvgDelay":aux_agg[3], "AvgLnDelay":aux_agg[4], "p10":aux_agg[5], "p20":aux_agg[6], "p50":aux_agg[7], "p80":aux_agg[8], "p90":aux_agg[9], "Jitter":aux_agg[10]}
                 
                 lst_result_flows = []
                 aux_result_flows = f[j].split(':')
@@ -1007,7 +1009,7 @@ class DatanetAPI:
                     tmp_result_flow = flow.split(',')
                     tmp_result_flow = list(map(float, tmp_result_flow))
                     q_flows.put([tmp_result_flow[0], tmp_result_flow[1]])
-                    dict_result_tmp = {'PktsDrop':tmp_result_flow[2], "AvgDelay":tmp_result_flow[3], "AvgLnDelay":tmp_result_flow[4], "p10":tmp_result_flow[5], "p20":tmp_result_flow[6], "p50":tmp_result_flow[7], "p80":tmp_result_flow[8], "p90":tmp_result_flow[9], "Jitter":tmp_result_flow[10], "AvgQueueDelay":aux_agg[11]}
+                    dict_result_tmp = {'PktsDrop':tmp_result_flow[2], "AvgDelay":tmp_result_flow[3], "AvgLnDelay":tmp_result_flow[4], "p10":tmp_result_flow[5], "p20":tmp_result_flow[6], "p50":tmp_result_flow[7], "p80":tmp_result_flow[8], "p90":tmp_result_flow[9], "Jitter":tmp_result_flow[10]}
                     lst_result_flows.append(dict_result_tmp)
                 
                 dict_traffic_srcdst = {}
@@ -1210,8 +1212,10 @@ class DatanetAPI:
                 qos_queue_stat_lst = []
                 for q in range(num_qos_queues):
                     qos_queue_stat = {"loses":float(params[2+q*3]),
-                                      "avgQueueOcupation":float(params[2+q*3+1]),
-                                      "maxQueueOcupation":float(params[2+q*3+2])}
+                                      "avgQueueOcupation":float(params[2+q*5+1]),
+                                      "maxQueueOcupation":int(params[2+q*5+2]),
+                                      "lastPktsQueueOcupation":int(params[2+q*5+3]),
+                                      "lastBitsQueueOcupation":int(params[2+q*5+4])}
                     qos_queue_stat_lst.append(qos_queue_stat)
                 link_stat["qos_queues_stat"] = qos_queue_stat_lst;
                 links_stat[i][j] = link_stat
