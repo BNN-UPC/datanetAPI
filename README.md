@@ -197,4 +197,12 @@ The API includes methods to obtain more easily some information from a sample ob
 * s.get_links_performance(): Returns the links performance object. Assuming the object is denoted by lp, the performance metrics stored for a specific link can be accessed using lp[src][dst] . See more details about the link_performance in the previous section.
 * s.get_srcdst_link_performance(src,dst): Directly returns a dictionary with the link performance metrics of the src-dst link or None if the link doesn’t exist. See more details about the link_performance in the previous section.
 
-
+## Credits
+This project would not have been possible without the contribution of:
+* [Arnau Badia](https://github.com/arnaubadia) - Barcelona Neural Networking center, Universitat Politècnica de Catalunya
+* [Albert López](https://github.com/albert-lopez) - Barcelona Neural Networking center, Universitat Politècnica de Catalunya
+* [Jose Suárez-Varela](https://github.com/jsuarezv) - Barcelona Neural Networking center, Universitat Politècnica de Catalunya
+* Adrián Manco Sánchez - Barcelona Neural Networking center, Universitat Politècnica de Catalunya
+* Víctor Sendino Garcia - Barcelona Neural Networking center, Universitat Politècnica de Catalunya
+* [Pere Barlet Ros](https://github.com/pbarlet) - Barcelona Neural Networking center, Universitat Politècnica de Catalunya
+* Albert Cabellos Aparicio - Barcelona Neural Networking center, Universitat Politècnica de Catalunya
