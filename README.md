@@ -136,14 +136,14 @@ In the case of traffic_matrix, using information at the flow-level is recommende
 * g[src][dst][0]: Dictionary with the information parameters of the (directed) link between node src and node dst (see more details of the link parameters in Section 4.4).
 
 **port_stats**: This object is structured as a list of dictionaries of dictionaries object and contains the performance metrics of the output node ports. The outer list contains a dictionary of dictionaries for each node. The first dictionary contains the list of adjacents nodes and the last dictionary contain the statistics of the outgoing port used to reach the adjacent node. The performance dictionary contains the following keys:
-* ‘utilization’: Tan per one of the average utilization of the outgoing port.
-* ‘losses’: Tan per one of the average packets lost in the outgoing port.
+* ‘utilization’: Average utilization of the outgoing port (in the range [0, 1]).
+* ‘losses’: Average packets lost in the outgoing port (in the range [0, 1]).
 * 'avgPacketSize': Average packet size from all outgoing packets going through the port (bits).
-* 'qosQueuesStats': List of dictionaries containing the statistics for each QoS queue.
-    * 'utilization': Tan per one of the average utilization of the outgoing port corresponding to the traffic associate with the QoS queue.
-    * 'losses': Tan per one of the average packets lost in the outgoing QoS queue.
+* 'qosQueuesStats': List of dictionaries containing the statistics for each QoS queue. Note that in the associated datasets all devices have only one FIFO queue.
+    * 'utilization': Average utilization of the outgoing port corresponding to the traffic associate with the QoS queue (in the range [0, 1])
+    * 'losses': Average packets lost in the outgoing QoS queue (in the range [0, 1]).
     * 'avgPacketSize': Average packet size from all outgoing packets going through the QoS queue (bits).
-    * 'avgPortOccupancy': Average port occupancy ( service and waiting queue) of the QoS queue (packets).
+    * 'avgPortOccupancy': Average port occupancy (service and waiting queue) of the QoS queue (packets).
     * 'maxQueueOccupancy': Maximum occupancy seen on the QoS queue.
 
 Thus, assuming p_stats is the port stats object of a sample, we may access the information as follows:
