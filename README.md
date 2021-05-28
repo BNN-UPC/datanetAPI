@@ -2,6 +2,12 @@
 ## 1 Introduction
 This Python API is intended to provide users with a simple and intuitive way to access the information contained in the associated datasets. Following a user-oriented approach, the API aims to abstract users from the internal details of our datasets, thus making much easier extracting the information.
 
+This version is associated to the datasets of the Graph Neural Networking challenge 2021. You can find more information about this competition at the follwoing links:
+
+https://bnn.upc.edu/challenge/gnnet2021
+
+https://bnn.upc.edu/challenge/gnnet2021/dataset
+
 ## 2 How does it work?
 
 Beyond the complex structure of the datasets, which include many files distributed in different directories, this API provides sequentially samples (one at a time) structured in a user-friendly way. 
