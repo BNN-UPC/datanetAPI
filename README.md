@@ -14,13 +14,13 @@ We provide below a simple code snippet to initialize the iterator object of the 
 
 ````python
 import datanetAPI
-reader = datanetAPI.DatanetAPI(< pathToDataset >,[<IntensityRange >], [<TopologySizes>], [shuffle])
+reader = datanetAPI.DatanetAPI(< pathToDataset >,<IntensityRange >, [shuffle])
 it = iter(reader)
 for sample in it:
   <process sample code>
 ````
 
-First of all, the user needs to download and import this Python library (line 1). Then, an instance of datanetAPI can be initialized (line 2), where pathToDataset should point to the root directory of the dataset to be processed.  If more than one dataset is found in the root directory, all of them are processed. Note that this dataset should be uncompressed in advance. IntensityRange is a Python list of integers that enables to filter only samples within a traffic intensity range. Thus, the user can specify: (i) a single value, if a specific intensity is desired, or (ii) a list with two values, that will be considered respectively as the lower and upper bounds of a range of intensities desired (e.g., IntensityRange = [800 1200] will return only the samples with traffic intensity from 800 to 1200).  If IntensityRange  is not specified or it is set as an empty array, then the iterator object will return all the samples of the dataset. TopologySizes is a Python list of integers that enables to filter only samples with a specific topology size. The user can specify a list of integers corresponding to the topology sizes to be processed. By default, all topology sizes are used. Finally, shuffle is a boolean that by default is 'false' and indicates if the sample files should be shuffled before being processed. Note that a dataset contains multiple compressed files, each one containing several samples. Samples from the same file are not shuffled. Afterward, the iterator object can be created (line 3).
+First of all, the user needs to download and import this Python library (line 1). Then, an instance of datanetAPI can be initialized (line 2), where pathToDataset should point to the root directory of the dataset to be processed. Note that this dataset should be uncompressed in advance. IntensityRange is a Python list of integers that enables to filter only samples within a traffic intensity range. Thus, the user can specify: (i) a single value, if a specific intensity is desired, or (ii) a list with two values, that will be considered respectively as the lower and upper bounds of a range of intensities desired (e.g., IntensityRange = [800 1200] will return only the samples with traffic intensity from 800 to 1200). In a typical case, IntensityRange should be an empty list (i.e., IntensityRange = [ ]), then the iterator object will return all the samples of the dataset. Finally, shuffle is a boolean that by default is 'false' and indicates if the sample files should be shuffled before being processed. Afterwards, the iterator object can be created (line 3).
 Once the iterator object is created, samples can be sequentially extracted using a “for” loop (line 4). 
 
 Alternatively, the next(it) method can be used to read only the next sample. This enables, for instance, read only “n” samples from the dataset using:
@@ -36,19 +36,18 @@ The next section describes in detail all the information that a sample object co
 
 This section describes how the data is structured within a sample object.
 
-Every sample is a container including information about: (i) a network topology, (ii) parameters used to generate the traffic in our simulation tool, (iii) a routing configuration,  (iv) some measurements (delay, jitter and loss) measured in our simulator resulting from the network configuration (i.e., topology + traffic distribution + routing) and and (v) output port of nodes statistics. All this information is provided for every source-destination pair of the network. Note that we consider only a path connecting every source-destination (src-dst) pair, however more than a src-dst flow can traverse the same path and performance measurements can be individually obtained for each flow. Also, note that our simulator implements a method that stops the simulation when it detects that the network reaches a stationary state. Consequently, the simulation time to generate each sample is different. This is why we provide measurements such as generated or dropped packets as numbers relative to time units (e.g., packets/time unit)
+Every sample is a container including information about: (i) a network topology, (ii) parameters used to generate the traffic in our simulation tool, (iii) a routing configuration, and (iii) some measurements (delay, jitter and loss) measured in our simulator resulting from the network configuration (i.e., topology + traffic distribution + routing). All this information is provided for every source-destination pair of the network. Note that we consider only a path connecting every source-destination (src-dst) pair, however more than a src-dst flow can traverse the same path and performance measurements can be individually obtained for each flow. Also, note that our simulator implements a method that stops the simulation when it detects that the network reaches a stationary state. Consequently, the simulation time to generate each sample is different. This is why we provide measurements such as generated or dropped packets as numbers relative to time units (e.g., packets/time unit)
 
 
 More in detail, every sample instance comprises the following attributes:
 * *global_packets*: Number of packets transmitted in the network per time unit (packets/time unit).
 * *global_losses*: Packets lost in the network per time unit (packets/time unit).
 * *global_delay*: Average per-packet delay over all the packets transmitted in the network (time units).
-* *maxAvgLambda*: This variable is used in our simulator to define the overall traffic intensity of the network scenario. Particularly, this is the maximum average traffic rate (bits/time unit) that a path can generate in the simulation scenario. Then, the average traffic rate of each src-dst path (lambda) is computed as 'maxAvgLambda' multiplied by a random value between 0.1 and 1. Note that, this traffic rate may be split into several flows sending traffic over the same src-dst path.
+* *maxAvgLambda*: This variable is used in our simulator to define the overall traffic intensity of the network scenario. Particularly, this is the maximum average traffic rate (bits/time unit) that a path can generate in the simulation scenario. Then, the average traffic rate of each src-dst path (lambda) is computed as 'maxAvgLambda' multiplied by a random value between 0 a 1. Note that, this traffic rate may be split into several flows sending traffic over the same src-dst path.
 * *performance_matrix*: Matrix with aggregate src-dst and flow-level performance meaurements (delay, jitter and loss) measured on each src-dst pair (see more details below). 
 * *traffic_matrix*: Matrix with the time and size distributions used to generate traffic for each src-dst pair (see more details below). 
 * *routing_matrix*: Matrix with the paths to connect every src-dst pair (see more details below).
 * *topology_object*: It uses a Graph object from the Networkx library including topology-related information at the node and link-level (see more details below).
-* *port_stats*: list of dictionaries with the performance metrics associated with each output port. (see more details below). Not all datasets contain this information. In that case, this object is None
 
 **performance_matrix**: This is a matrix that indexes performance measurements at the level of src-dst pairs. Particularly, it considers that more than one flow can be exchanged on each src-dst pair. Hence, it provides performance measurements at two levels of granularity: (i) for all aggregate flows on each src-dst pair, and (ii) for every flow individually. Every element of this matrix (i.e., performance_matrix[src,dst]) contains a dictionary with the following keys: 
 * ‘AggInfo’: dictionary with performance measurements for all aggregate flows between a specific [src,dst] pair. 
@@ -121,29 +120,13 @@ performance _matrix[0,1][′AggInfo′][′AvgDelay′]) = performance _matrix[0
 ```
 In the case of traffic_matrix, using information at the flow-level is recommended (e.g., traffic_matrix[0,1][′Flows′][′0′]), since it includes additional information not considered at the level of aggregate traffic.
 
-**routing_matrix**: This matrix describes the routing configuration. Particularly, it includes all the paths connecting every src-dst pair. Assuming route is a routing_matrix, “route[src,dst]” returns a list  describing the path from node src to node dst. Particularly, this list includes the IDs of the nodes that the path traverses. Note that all the flows of a src-dst pair follow the same path. If no path exists between src and dst, or src and dst are the same node, then the corresponding position of the matrix contains None.
+**routing_matrix**: This matrix describes the routing configuration. Particularly, it includes all the paths connecting every src-dst pair. Assuming route is a routing_matrix, “route[src,dst]” returns a list  describing the path from node src to node dst. Particularly, this list includes the IDs of the nodes that the path traverses. Note that all the flows of a src-dst pair follow the same path. 
 
 **topology_object**: This is a Graph object form the Networkx library that provides information about the network topology. Particularly, this object encodes information on nodes and links (i.e., edges). Assuming g is a graph object of a sample instance, we can access the data as follows:
 * g.nodes: Returns a list with all the nodes IDs. 
 * g.nodes[id]: Returns a dictionary with all the information parameters of the selected node (see more details of the node parameters Section 4.3).
 * g.edges: Returns a list of tuples describing the topology edges. Each tuple is described as (src node ID, dst node ID, link ID). The link ID is always ‘0’ as only one link for the same src-dst pair is supported at this moment.
 * g[src][dst][0]: Dictionary with the information parameters of the (directed) link between node src and node dst (see more details of the link parameters in Section 4.4).
-
-**port_stats**: This object is structured as a list of dictionaries of dictionaries object and contains the performance metrics of the output node ports. The outer list contains a dictionary of dictionaries for each node. The first dictionary contains the list of adjacents nodes and the last dictionary contain the statistics of the outgoing port used to reach the adjacent node. The performance dictionary contains the following keys:
-* ‘utilization’: Tan per one of the average utilization of the outgoing port.
-* ‘losses’: Tan per one of the average packets lost in the outgoing port.
-* 'avgPacketSize': Average packet size from all outgoing packets going through the port (bits).
-* 'qosQueuesStats': List of dictionaries containing the statistics for each QoS queue.
-    * 'utilization': Tan per one of the average utilization of the outgoing port corresponding to the traffic associate with the QoS queue.
-    * 'losses': Tan per one of the average packets lost in the outgoing QoS queue.
-    * 'avgPacketSize': Average packet size from all outgoing packets going through the QoS queue (bits).
-    * 'avgPortOccupancy': Average port occupancy ( service and waiting queue) of the QoS queue (packets).
-    * 'maxQueueOccupancy': Maximum occupancy seen on the QoS queue.
-
-Thus, assuming p_stats is the port stats object of a sample, we may access the information as follows:
-* p_stats[src][dst]: dictionary with the performance measurements of the port [src][dst]. If the dst node is not adjacent to src node. A KeyError exception will be produced.
-* p_stats[src][dst][<nameparam>]: Read the <nameparam> parameter of the outgoing port of the src node to dst node.
-* p_stats[src][dst]["qosQueuesStats"][0][<nameparam>]: Read the <nameparam> parameter of the QoS queue 0.
 
 ### 4.1 Parameters of time distributions
 Our simulator considers the following inter-packet arrival time distributions for different flows in the network:
@@ -154,6 +137,7 @@ Our simulator considers the following inter-packet arrival time distributions fo
 * TimeDist.NORMAL_T: EqLambda, AvgPktsLambda, StdDev
 * TimeDist.ONOFF_T: EqLambda, PktsLambdaOn, AvgTOff, AvgTOn, ExpMaxFactor
 * TimeDist.PPBP_T: EqLambda, BurstGenLambda, Bitrate, ParetoMinSize, ParetoMaxSize, ParetoAlfa, ExpMaxFactor
+* TimeDist.TRACE_T: EqLambda
 
 ### 4.2 Parameters of packet size distributions
 
@@ -163,6 +147,7 @@ Our simulator considers the following packet size distributions for different fl
 * SizeDist.UNIFORM_S: AvgPktSize, MinSize, MaxSize 
 * SizeDist.BINOMIAL_S: AvgPktSize, PktSize1, PktSize2 
 * SizeDist.GENERIC_S: AvgPktSize, NumCandidates, Size_i, Prob_i
+* SizeDist.TRACE_S: AvgPktSize
 
 ### 4.3 List of node parameters
 
@@ -172,6 +157,7 @@ All the possible node parameters are listed below:
 * ‘queueSizes’: queue sizes (in number of packets) for each output queue of the node. Values are separated by commas. Each value is associated with a QoS queue.
 * ‘schedulingPolicy’: Policy used to serve the QoS queues. It may be one of the following ones: ‘FIFO’ (First-In, First-Out), ‘SP’ (Strict Priority), ‘WFQ’ (Weighted Fair Queuing), ‘DRR’ (Deficit Round Robin). If not specified, a ‘FIFO’ policy is considered by default. 
 * ‘schedulingWeights’: List of weights separated by commas associated to each QoS queue. Used only in the WFQ and DRR scheduling policies.
+* 'tosToQoSqueue': Association of ToS to QoS queues. QoS queues are separated by semicolons (;) and the corresponding substrings represent the list of ToS associated with the QoS queue separated by comma (,).
 
 ### 4.4 List of link parameters
 
@@ -200,5 +186,4 @@ The API includes methods to obtain more easily some information from a sample ob
 * s.get_srcdst_link_bandwidth(src,dst): Returns the bandwidth in bits/time unit of the link between node src and node dst in case there is a link between both nodes, otherwise it returns -1.
 * s.get_node_properties(node_id): Returns a dictionary with the parameters of the node identified by node_id if it exists. Otherwise it returns ‘None’. 
 * s.get_link_properties(src,dst): Returns a dictionary with the parameters of the link between node src and node dst if they are connected by a link. Otherwise it returns ‘None’.
-* s.get_port_stats(): Returns the port_stats object. Assuming this object is denoted by ps,  the information that port_stats stores for a specific src-dst port can be accessed using ps[src][dst] . See more details about the port_stats in the previous section.
-* s.get_srcdst_port_stats(src,dst): Directly returns a dictionary with the statistics associated with the outgoing port of the src node to dst node. See more details about the returned statistics in the port_stats section.
+

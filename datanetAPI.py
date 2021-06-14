@@ -43,6 +43,7 @@ class TimeDist(IntEnum):
     NORMAL_T = 3
     ONOFF_T = 4
     PPBP_T = 5
+    TRACE_T = 6
     
     @staticmethod
     def getStrig(timeDist):
@@ -58,6 +59,8 @@ class TimeDist(IntEnum):
             return ("ONOFF_T")
         elif (timeDist == 5):
             return ("PPBP_T")
+        elif (timeDist == 6):
+            return ("TRACE_T")
         else:
             return ("UNKNOWN")
 
@@ -69,6 +72,7 @@ class SizeDist(IntEnum):
     UNIFORM_S = 1
     BINOMIAL_S = 2
     GENERIC_S = 3
+    TRACE_S = 4
     
     @staticmethod
     def getStrig(sizeDist):
@@ -80,6 +84,8 @@ class SizeDist(IntEnum):
             return ("BINOMIAL_S")
         elif (sizeDist ==3):
             return ("GENERIC_S")
+        elif (sizeDist ==4):
+            return ("TRACE_S")
         else:
             return ("UNKNOWN")
 
@@ -114,11 +120,6 @@ class Sample:
         source i and destination j.
     topology_object : 
         Network topology using networkx format.
-    port_stats: list-of-dict-of-dict data structure:
-        The outer list contain a dict-of-dict for each node. The first dict contain
-        the list of adjacents nodes and the last dict contain the parameters of the
-        interface port.
-    
     """
     
     global_packets = None
@@ -130,7 +131,6 @@ class Sample:
     traffic_matrix = None
     routing_matrix = None
     topology_object = None
-    port_stats = None
     
     data_set_file = None
     _results_line = None
@@ -138,7 +138,6 @@ class Sample:
     _input_files_line = None
     _status_line = None
     _flowresults_line = None
-    _link_usage_line = None
     _routing_file = None
     _graph_file = None
     
@@ -332,16 +331,7 @@ class Sample:
             cap = -1
             
         return cap
-    
-    def get_port_stats(self):
-        """
-        Returns the port_stats object of this Sample instance.
-        """
-        if (self.port_stats == None):
-            raise DatanetException("ERROR: The processed dataset doesn't have port performance data")
         
-        return self.port_stats
-    
         
     def _set_data_set_file_name(self,file):
         """
@@ -480,8 +470,7 @@ class DatanetAPI:
     information gathered.
     """
     
-    def __init__ (self, data_folder, intensity_values = [], topology_sizes = [],
-                  shuffle=False):
+    def __init__ (self, data_folder, intensity_values = [], shuffle=False):
         """
         Initialization of the PasringTool instance
 
@@ -489,12 +478,9 @@ class DatanetAPI:
         ----------
         data_folder : str
             Folder where the dataset is stored.
-        intensity_values : array of 1 or 2 integers
+        intensity_values : int or array [x, y]
             User-defined intensity values used to constrain the reading process
-            to the specified range.
-        topology_sizes : array of integers
-            User-defined topology sizes used to constrain the reading process
-            to the specified values.
+            to these/this value/range of values.
         shuffle: boolean
             Specify if all files should be shuffled. By default false
         Returns
@@ -504,8 +490,8 @@ class DatanetAPI:
         """
         
         self.data_folder = data_folder
+        self.dict_queue = queue.Queue()
         self.intensity_values = intensity_values
-        self.topology_sizes = topology_sizes
         self.shuffle = shuffle
         
         self._all_tuple_files = []
@@ -551,16 +537,105 @@ class DatanetAPI:
         
         self._selected_tuple_files = tuple_files_lst.copy()
 
-    def _create_routing_matrix(self, routing_file, net_size):
+    def _readRoutingFile(self, routing_file, netSize):
+        """
+        Pending to compare against getSrcPortDst
+
+        Parameters
+        ----------
+        routing_file : str
+            File where the routing information is located.
+        netSize : int
+            Number of nodes in the network.
+
+        Returns
+        -------
+        R : netSize x netSize matrix
+            Matrix where each  [i,j] states what port node i should use to
+            reach node j.
+
+        """
+        
+        fd = open(routing_file,"r")
+        R = numpy.zeros((netSize, netSize)) - 1
+        src = 0
+        for line in fd:
+            camps = line.split(',')
+            dst = 0
+            for port in camps[:-1]:
+                R[src][dst] = port
+                dst += 1
+            src += 1
+        return (R)
+
+    def _getRoutingSrcPortDst(self, G):
+        """
+        Return a dictionary of dictionaries with the format:
+        node_port_dst[node][port] = next_node
+
+        Parameters
+        ----------
+        G : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        
+        node_port_dst = {}
+        for node in G:
+            port_dst = {}
+            node_port_dst[node] = port_dst
+            for destination in G[node].keys():
+                port = G[node][destination][0]['port']
+                node_port_dst[node][port] = destination
+        return(node_port_dst)
+    
+    def _create_routing_matrix_from_dst_routing_file(self, G, routing_file):
         """
 
         Parameters
         ----------
-
+        G : graph
+            Graph representing the network.
         routing_file : str
-            File where the information about routing is located.
-        netSize : int
-            Number of nodes of the topology
+            File where the information about routing is located. The file is a 
+            destination routing file.
+
+        Returns
+        -------
+        MatrixPath : NxN Matrix
+            Matrix where each cell [i,j] contains the path to go from node
+            i to node j.
+
+        """
+        netSize = G.number_of_nodes()
+        node_port_dst = self._getRoutingSrcPortDst(G)
+        R = self._readRoutingFile(routing_file, netSize)
+        MatrixPath = numpy.empty((netSize, netSize), dtype=object)
+        for src in range (0,netSize):
+            for dst in range (0,netSize):
+                node = src
+                path = [node]
+                while (R[node][dst] != -1):
+                    out_port = R[node][dst];
+                    next_node = node_port_dst[node][out_port]
+                    path.append(next_node)
+                    node = next_node
+                MatrixPath[src][dst] = path
+        return (MatrixPath)
+    
+    def _create_routing_matrix_from_src_routing_dir(self, G, src_routing_dir):
+        """
+
+        Parameters
+        ----------
+        G : graph
+            Graph representing the network.
+        src_routing_dir : str
+            Directory where we found the routing filesFile. One for each src node. 
 
         Returns
         -------
@@ -570,12 +645,47 @@ class DatanetAPI:
 
         """
         
-        MatrixPath = numpy.empty((net_size, net_size), dtype=object)
-        with open (routing_file) as fd:
-            for line in fd:
-                nodes = line.split(";")
-                nodes = list(map(int, nodes))
-                MatrixPath[nodes[0],nodes[-1]] = nodes
+        netSize = G.number_of_nodes()
+        node_port_dst = self._getRoutingSrcPortDst(G)
+        src_R = []
+        for i in range(netSize):
+            routing_file = os.path.join(src_routing_dir,"Routing_src_"+str(i)+".txt")
+            src_R.append(self._readRoutingFile(routing_file, netSize))
+        MatrixPath = numpy.empty((netSize, netSize), dtype=object)
+        for src in range (0,netSize):
+            R = src_R[src]
+            for dst in range (0,netSize):
+                node = src
+                path = [node]
+                while (R[node][dst] != -1):
+                    out_port = R[node][dst];
+                    next_node = node_port_dst[node][out_port]
+                    path.append(next_node)
+                    node = next_node
+                MatrixPath[src][dst] = path
+        return (MatrixPath)
+
+    def _create_routing_matrix(self, G,routing_file):
+        """
+
+        Parameters
+        ----------
+        G : graph
+            Graph representing the network.
+        routing_file : str
+            File where the information about routing is located.
+
+        Returns
+        -------
+        MatrixPath : NxN Matrix
+            Matrix where each cell [i,j] contains the path to go from node
+            i to node j.
+
+        """
+        if (os.path.isfile(routing_file)):
+            MatrixPath = self._create_routing_matrix_from_dst_routing_file(G,routing_file)
+        elif(os.path.isdir(routing_file)):
+            MatrixPath = self._create_routing_matrix_from_src_routing_dir(G,routing_file)
         
         return (MatrixPath)
 
@@ -602,33 +712,7 @@ class DatanetAPI:
             graphs_dic[topology_file] = G
         
         return graphs_dic
-    
-    def _graph_links_update(self,G,file):
-        """
-        Updates the graph with the link information of the file
-        
-        Parameters
-        ----------
-        G : graph
-            Graph object to be updated
-        file: str
-            file name that contains the information of the links to be modified: src;dst;bw (bps)
-            
-        Returns
-        -------
-        None
-        
-        """
-        
-        try:
-            fd = open(file,"r")
-        except:
-            print ("ERROR: %s not exists" % (file))
-            exit(-1)
-        
-        for line in fd:
-            aux = line.split(";")
-            G[int(aux[0])][int(aux[1])][0]["bandwidth"] = int(aux[2])
+       
 
     def __iter__(self):
         """
@@ -652,6 +736,7 @@ class DatanetAPI:
         if self.shuffle:
             random.Random(1234).shuffle(tuple_files)
         ctr = 0
+        error_files = []
         for root, file in tuple_files:
             try:
                 it = 0 
@@ -665,10 +750,6 @@ class DatanetAPI:
                     flowresults_file = tar.extractfile(dir_info.name+"/flowSimulationResults.txt")
                 else:
                     flowresults_file = None
-                if (dir_info.name+"/linkUsage.txt" in tar.getnames()):
-                    link_usage_file = tar.extractfile(dir_info.name+"/linkUsage.txt")
-                else:
-                    link_usage_file = None
                 while(True):
                     s = Sample()
                     s._set_data_set_file_name(os.path.join(root, file))
@@ -679,10 +760,10 @@ class DatanetAPI:
                         s._flowresults_line = flowresults_file.readline().decode()[:-2]
                     s._status_line = status_file.readline().decode()[:-1]
                     s._input_files_line = input_files.readline().decode()[:-1]
-                    if (link_usage_file):
-                        s._link_usage_line = link_usage_file.readline().decode()[:-1]
+                    
                     if (len(s._results_line) == 0) or (len(s._traffic_line) == 0):
                         break
+                    
                     if (not ";OK;" in s._status_line):
                         print ("Removed iteration: "+s._status_line)
                         continue;
@@ -703,42 +784,44 @@ class DatanetAPI:
                         g = networkx.read_gml(s._graph_file, destringizer=int)
                         self._graphs_dic[s._graph_file] = g
                     
-                    # Filter topology size
-                    if (len(self.topology_sizes) != 0 and not len(g) in self.topology_sizes):
-                        continue
-                
-                    if (len(used_files) == 4):
-                        self._graph_links_update(g,os.path.join(root,"links_bw",used_files[3]))
                     
                     # XXX We considerer that all graphs using the same routing file have the same topology
                     if (s._routing_file in self._routings_dic):
                         routing_matrix = self._routings_dic[s._routing_file]
                     else:
-                        routing_matrix = self._create_routing_matrix(s._routing_file,len(g))
+                        routing_matrix = self._create_routing_matrix(g,s._routing_file)
                         self._routings_dic[s._routing_file] = routing_matrix
                     
+                    self._process_flow_results_traffic_line(s._results_line, s._traffic_line, s._flowresults_line, s._status_line, s)
                     s._set_routing_matrix(routing_matrix)
                     s._set_topology_object(g)
-                    self._process_flow_results(s)
-                    if (s._link_usage_line):
-                        self._process_link_usage(s)
                     it +=1
                     yield s
-            except (GeneratorExit,SystemExit) as e:
+            except GeneratorExit:
                 raise
             except:
-                #traceback.print_exc()
-                print ("Error in the file: %s   iteration: %d" % (file,it))
-                    
+                traceback.print_exc()
+                print ("Error in the file:" +file)
+                print ("     iteration: " +str(it))
+                error_files.append(file)
+
             ctr += 1
             #print("Progress check: %d/%d" % (ctr,len(tuple_files)))
+        print(error_files)
+        print (len(error_files))
     
-    def _process_flow_results(self, s):
+    def _process_flow_results_traffic_line(self, rline, tline, fline, sline, s):
         """
         
 
         Parameters
         ----------
+        rline : str
+            Last line read in the results file.
+        tline : str
+            Last line read in the traffic file.
+        fline : str
+            Last line read in the flows file.
         s : Sample
             Instance of Sample associated with the current iteration.
 
@@ -749,21 +832,21 @@ class DatanetAPI:
         """
         
         q_flows = queue.Queue()
-        first_params = s._results_line.split('|')[0].split(',')
+        first_params = rline.split('|')[0].split(',')
         first_params = list(map(float, first_params))
         s._set_global_packets(first_params[0])
         s._set_global_losses(first_params[1])
         s._set_global_delay(first_params[2])
-        r = s._results_line[s._results_line.find('|')+1:].split(';')
-        if (s._flowresults_line):
-            f = s._flowresults_line.split(';')
+        r = rline[rline.find('|')+1:].split(';')
+        if (fline):
+            f = fline.split(';')
         else:
             f = r
         
-        ptr = s._traffic_line.find('|')
-        t = s._traffic_line[ptr+1:].split(';')
-        s.maxAvgLambda = float(s._traffic_line[:ptr])
-        sim_time  = float(s._status_line.split(';')[0])
+        ptr = tline.find('|')
+        t = tline[ptr+1:].split(';')
+        s.maxAvgLambda = float(tline[:ptr])
+        sim_time  = float(sline.split(';')[0])
         
         m_result = []
         m_traffic = []
@@ -842,6 +925,7 @@ class DatanetAPI:
 
         """
         
+    #    print(data[0])
         if data[0] == 0: 
             dict_traffic['TimeDist'] = TimeDist.EXPONENTIAL_T
             params = {}
@@ -895,6 +979,12 @@ class DatanetAPI:
             params['ExpMaxFactor'] = data[7]
             dict_traffic['TimeDistParams'] = params
             return 8
+        elif data[0] == 6:
+            dict_traffic['TimeDist'] = TimeDist.TRACE_T
+            params = {}
+            params['EqLambda'] = data[1]
+            dict_traffic['TimeDistParams'] = params
+            return 2
         else: return -1
     
     def _sizedistparams(self, data, starting_point, dict_traffic):
@@ -947,48 +1037,16 @@ class DatanetAPI:
                 params["Size_%d"%(i/2)] = data[starting_point+3+i]
                 params["Prob_%d"%(i/2)] = data[starting_point+4+i]
             dict_traffic['SizeDistParams'] = params
+        elif data[starting_point] == 4:
+            dict_traffic['SizeDist'] = SizeDist.TRACE_S
+            params = {}
+            try:
+                params['AvgPktSize'] = round(dict_traffic['AvgBw']/dict_traffic['PktsGen'],6)
+            except:
+                params['AvgPktSize'] = 0
+            dict_traffic['SizeDistParams'] = params
         else:
             return -1
         return 0
 
-    def _process_link_usage(self,s):
-        """
 
-        Parameters
-        ----------
-        s : Sample
-            Instance of Sample associated with the current iteration.
-
-        Returns
-        -------
-        None.
-
-        """
-        # port_state is an array of the nodes containing a dictionary with the adjacent nodes. 
-        # Each adjacent node contains a dictionary with performance metrics
-        port_stat = []
-        l = s._link_usage_line.split(";")
-        netSize = s.get_network_size()
-        for i in range(netSize):
-            port_stat.append({})
-            for j in range(netSize):
-                params = l[i*netSize+j].split(",")
-                if (params[0] == "-1"):
-                    continue
-                link_stat = {}
-                link_stat["utilization"] = float(params[0])
-                link_stat["losses"] = float(params[1])
-                link_stat["avgPacketSize"] = float(params[2])
-                num_qos_queues = int((len(params)-3)/5)
-                qos_queue_stat_lst = []
-                for q in range(num_qos_queues):
-                    qos_queue_stat = {"utilization":float(params[3+q*5]),
-                                  "losses":float(params[3+q*5+1]),
-                                  "avgPortOccupancy":float(params[3+q*5+2]),
-                                  "maxQueueOccupancy":float(params[3+q*5+3]),
-                                  "avgPacketSize":float(params[3+q*5+4])}
-                    qos_queue_stat_lst.append(qos_queue_stat)
-                link_stat["qosQueuesStats"] = qos_queue_stat_lst;
-                port_stat[i][j] = link_stat
-#         
-        s.port_stats = port_stat
