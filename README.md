@@ -135,7 +135,7 @@ In the case of traffic_matrix, using information at the flow-level is recommende
 * g.edges: Returns a list of tuples describing the topology edges. Each tuple is described as (src node ID, dst node ID, link ID). The link ID is always ‘0’ as only one link for the same src-dst pair is supported at this moment.
 * g[src][dst][0]: Dictionary with the information parameters of the (directed) link between node src and node dst (see more details of the link parameters in Section 4.4).
 
-**port_stats**: This object is structured as a list of dictionaries of dictionaries object and contains the performance metrics of the output node ports. The outer list contains a dictionary of dictionaries for each node. The first dictionary contains the list of adjacents nodes and the last dictionary contain the statistics of the outgoing port used to reach the adjacent node. The performance dictionary contains the following keys:
+**port_stats**: This object is structured as a list of nested dictionaries and contains the performance metrics of the output node ports. The outer list contains a dictionary of dictionaries for each node. The first dictionary contains the list of adjacents nodes and the last dictionary contains the statistics of the outgoing port used to reach the adjacent node. The performance dictionary contains the following keys:
 * ‘utilization’: Average utilization of the outgoing port (in the range [0, 1]).
 * ‘losses’: Average packets lost in the outgoing port (in the range [0, 1]).
 * 'avgPacketSize': Average packet size from all outgoing packets going through the port (bits).
