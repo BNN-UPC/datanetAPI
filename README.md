@@ -55,7 +55,7 @@ More in detail, every sample instance comprises the following attributes:
 * *traffic_matrix*: Matrix with the time and size distributions used to generate traffic for each src-dst pair (see more details below). 
 * *routing_matrix*: Matrix with the paths to connect every src-dst pair (see more details below).
 * *topology_object*: It uses a Graph object from the Networkx library including topology-related information at the node and link-level (see more details below).
-* *links_performance*: list of dictionaries with the performance metrics associated with each link. (see more details below). Not all datasets contain this information. In that case, this object is None
+* *links_performance*: list of dictionaries with the performance metrics associated with each link (see more details below). Not all datasets contain this information. In that case, this object is of type None.
 
 **performance_matrix**: This is a matrix that indexes performance measurements at the level of src-dst pairs. Particularly, it considers that more than one flow can be exchanged on each src-dst pair. Hence, it provides performance measurements at two levels of granularity: (i) for all aggregate flows on each src-dst pair, and (ii) for every flow individually. Every element of this matrix (i.e., performance_matrix[src,dst]) contains a dictionary with the following keys: 
 * ‘AggInfo’: dictionary with performance measurements for all aggregate flows between a specific [src,dst] pair. 
@@ -131,13 +131,13 @@ performance _matrix[0,1][′AggInfo′][′AvgDelay′]) = performance _matrix[0
 * g.edges: Returns a list of tuples describing the topology edges. Each tuple is described as (src node ID, dst node ID, link ID). The link ID is always ‘0’ as only one link for the same src-dst pair is supported at this moment.
 * g[src][dst][0]: Dictionary with the information parameters of the (directed) link between node src and node dst (see more details of the link parameters in Section 4.4).
 
-**links_performance**: This object is structured as a list of dictionaries of dictionaries object and contains the performance metrics of the links. The outer list contains a dictionary of dictionaries for each node. The first dictionary contains the list of adjacents nodes and the last dictionary contain the performance metrics of the link. The performance dictionary contains the following keys:
-* ‘utilization’: Tan per one of the average utilization of the link.
-* ‘loses’: Tan per one of the average packets lost in the link.
+**links_performance**: This object contains some performance metrics of links. It is structured as a list of dictionaries with dictionary objects inside. The outer list contains a dictionary of dictionaries for each src node. The first dictionary contains the list of adjacents nodes (dst) and the last dictionary contains the performance metrics for the link that connects the src with the dst node. This latter performance dictionary contains the following keys:
+* ‘utilization’: Average utilization of the link [0, 1].
+* ‘losses’: Ratio of packets dropped in the link [0, 1].
 
-Thus, assuming lperf is the links performance object of a sample, we may access the information as follows:
-* lperf[src][dst]: dictionary with the performance measurements of the link [src][dst]. If the dst node is not adjacent to src node. A KeyError exception will be produced.
-* lperf[src][dst][<nameparam>]: Read the <nameparam> parameter of the link.
+Thus, assuming Lperf is the links performance object of a sample, we may access the information as follows:
+* Lperf[src][dst]: Dictionary with the performance measurements of the link [src][dst]. If there is not a link between the src and dst nodes a KeyError exception will be raised.
+* Lperf[src][dst][\<nameparam\>]: Read the \<nameparam\> parameter of the link (e.g., "utilization", "losses")
 
 ### 4.1 Parameters of time distributions
 Our simulator considers the following inter-packet arrival time distributions for different flows in the network:
@@ -194,7 +194,7 @@ The API includes methods to obtain more easily some information from a sample ob
 * s.get_srcdst_link_bandwidth(src,dst): Returns the bandwidth in bits/time unit of the link between node src and node dst in case there is a link between both nodes, otherwise it returns -1.
 * s.get_node_properties(node_id): Returns a dictionary with the parameters of the node identified by node_id if it exists. Otherwise it returns ‘None’. 
 * s.get_link_properties(src,dst): Returns a dictionary with the parameters of the link between node src and node dst if they are connected by a link. Otherwise it returns ‘None’.
-* s.get_links_performance(): Returns the links performance object. Assuming the object is denoted by lp, the performance metrics stored for a specific link can be accessed using lp[src][dst] . See more details about the link_performance in the previous section.
+* s.get_links_performance(): Returns the links performance object. Assuming the object is denoted by lp, the performance metrics stored for a specific link can be accessed using lp[src][dst]. See more details about the link_performance in the previous section.
 * s.get_srcdst_link_performance(src,dst): Directly returns a dictionary with the link performance metrics of the src-dst link or None if the link doesn’t exist. See more details about the link_performance in the previous section.
 
 ## Credits
