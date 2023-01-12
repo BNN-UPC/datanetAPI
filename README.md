@@ -143,8 +143,12 @@ In the case of traffic_matrix, using information at the flow-level is recommende
     * 'utilization': Average utilization of the outgoing port corresponding to the traffic associate with the QoS queue (in the range [0, 1])
     * 'losses': Average packets lost in the outgoing QoS queue (in the range [0, 1]).
     * 'avgPacketSize': Average packet size from all outgoing packets going through the QoS queue (bits).
-    * 'avgPortOccupancy': Average port occupancy (service and waiting queue) of the QoS queue (packets).
-    * 'maxQueueOccupancy': Maximum occupancy seen on the QoS queue.
+    * 'avgPortOccupancy': Dictionary with the occupancy (service and waiting queue) of the QoS queue.
+        * 'num_pkts': avgPortOccupancy in packets. It is onlt defined if the queue size of the node is defined  in packets (‘queueSizes’)
+        * 'num_bits': avgPortOccupancy in bits. It is onlt defined if the queue size of the node is defined  in bits (‘bufferSizes‘)
+    * 'maxQueueOccupancy': Dictionary with the maximum occupancy seen on the QoS queue.
+        * 'num_pkts': maxQueueOccupancy in packets. It is onlt defined if the queue size of the node is defined  in packets (‘queueSizes’)
+        * 'num_bits': maxQueueOccupancy in bits. It is onlt defined if the queue size of the node is defined  in bits (‘bufferSizes‘)
 
 Thus, assuming p_stats is the port stats object of a sample, we may access the information as follows:
 * p_stats[src][dst]: dictionary with the performance measurements of the port [src][dst]. If the dst node is not adjacent to src node. A KeyError exception will be produced.
@@ -175,7 +179,8 @@ Our simulator considers the following packet size distributions for different fl
 All the possible node parameters are listed below:
 
 * ‘levelsQoS’: Number of supported QoS classes
-* ‘queueSizes’: queue sizes (in number of packets) for each output queue of the node. Values are separated by commas. Each value is associated with a QoS queue.
+* ‘queueSizes’: queue sizes (in number of packets) for each output queue of the node. Values are separated by commas. Each value is associated with a QoS queue. Not compatible with ‘bufferSizes‘
+* ‘bufferSizes‘: queue sizes (in number of bits) for each output queue of the node. Values are separated by commas. Each value is associated with a QoS queue. Not compatible with ‘queueSizes‘
 * ‘schedulingPolicy’: Policy used to serve the QoS queues. It may be one of the following ones: ‘FIFO’ (First-In, First-Out), ‘SP’ (Strict Priority), ‘WFQ’ (Weighted Fair Queuing), ‘DRR’ (Deficit Round Robin). If not specified, a ‘FIFO’ policy is considered by default. 
 * ‘schedulingWeights’: List of weights separated by commas associated to each QoS queue. Used only in the WFQ and DRR scheduling policies.
 

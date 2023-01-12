@@ -43,6 +43,8 @@ class TimeDist(IntEnum):
     NORMAL_T = 3
     ONOFF_T = 4
     PPBP_T = 5
+    TRACE_T = 6
+    EXTERNAL_PY_T = 7
     
     @staticmethod
     def getStrig(timeDist):
@@ -58,6 +60,10 @@ class TimeDist(IntEnum):
             return ("ONOFF_T")
         elif (timeDist == 5):
             return ("PPBP_T")
+        elif (timeDist == 6):
+            return ("TRACE_T")
+        elif (timeDist == 7):
+            return ("EXTERNAL_PY_T")
         else:
             return ("UNKNOWN")
 
@@ -69,6 +75,7 @@ class SizeDist(IntEnum):
     UNIFORM_S = 1
     BINOMIAL_S = 2
     GENERIC_S = 3
+    TRACE_S = 4
     
     @staticmethod
     def getStrig(sizeDist):
@@ -80,6 +87,8 @@ class SizeDist(IntEnum):
             return ("BINOMIAL_S")
         elif (sizeDist ==3):
             return ("GENERIC_S")
+        elif (sizeDist ==4):
+            return ("TRACE_S")
         else:
             return ("UNKNOWN")
 
@@ -481,7 +490,7 @@ class DatanetAPI:
     """
     
     def __init__ (self, data_folder, intensity_values = [], topology_sizes = [],
-                  shuffle=False):
+                  shuffle=False, seed=None):
         """
         Initialization of the PasringTool instance
 
@@ -504,14 +513,22 @@ class DatanetAPI:
         """
         
         self.data_folder = data_folder
-        self.intensity_values = intensity_values
+        if (len(intensity_values) == 1):
+            self.intensity_values = [intensity_values[0],intensity_values[0]]
+        else:    
+            self.intensity_values = intensity_values
         self.topology_sizes = topology_sizes
         self.shuffle = shuffle
-        
+        if seed:
+            self.seed = seed
+        else:
+            self.seed = 1234
+
         self._all_tuple_files = []
         self._selected_tuple_files = []
         self._graphs_dic = {}
         self._routings_dic = {}
+        self._external_param_dic = {"generate_autosimilar":["AR1-0","AR-a","samples"], "autosimilar_k2":["AR1-1","sigma","samples"]}
         for root, dirs, files in os.walk(self.data_folder):
             if ("graphs" not in dirs or "routings" not in dirs):
                 continue
@@ -551,16 +568,109 @@ class DatanetAPI:
         
         self._selected_tuple_files = tuple_files_lst.copy()
 
-    def _create_routing_matrix(self, routing_file, net_size):
+    def _readRoutingFile(self, routing_file, netSize):
+        """
+        Pending to compare against getSrcPortDst
+
+        Parameters
+        ----------
+        routing_file : str
+            File where the routing information is located.
+        netSize : int
+            Number of nodes in the network.
+
+        Returns
+        -------
+        R : netSize x netSize matrix
+            Matrix where each  [i,j] states what port node i should use to
+            reach node j.
+
+        """
+        
+        fd = open(routing_file,"r")
+        R = numpy.zeros((netSize, netSize)) - 1
+        src = 0
+        for line in fd:
+            camps = line.split(',')
+            dst = 0
+            for port in camps[:-1]:
+                R[src][dst] = port
+                dst += 1
+            src += 1
+        return (R)
+
+    def _getRoutingSrcPortDst(self, G):
+        """
+        Return a dictionary of dictionaries with the format:
+        node_port_dst[node][port] = next_node
+
+        Parameters
+        ----------
+        G : TYPE
+            DESCRIPTION.
+
+        Returns
+        -------
+        None.
+
+        """
+        is_multigraph = G.is_multigraph()
+        
+        node_port_dst = {}
+        for node in G:
+            port_dst = {}
+            node_port_dst[node] = port_dst
+            for destination in G[node].keys():
+                if (is_multigraph):
+                    port = G[node][destination][0]['port']
+                else:
+                    port = G[node][destination]['port']
+                node_port_dst[node][port] = destination
+        return(node_port_dst)
+    
+    def _create_routing_matrix_from_dst_routing_file(self, G, routing_file):
         """
 
         Parameters
         ----------
-
+        G : graph
+            Graph representing the network.
         routing_file : str
-            File where the information about routing is located.
-        netSize : int
-            Number of nodes of the topology
+            File where the information about routing is located. The file is a 
+            destination routing file.
+
+        Returns
+        -------
+        MatrixPath : NxN Matrix
+            Matrix where each cell [i,j] contains the path to go from node
+            i to node j.
+
+        """
+        netSize = G.number_of_nodes()
+        node_port_dst = self._getRoutingSrcPortDst(G)
+        R = self._readRoutingFile(routing_file, netSize)
+        MatrixPath = numpy.empty((netSize, netSize), dtype=object)
+        for src in range (0,netSize):
+            for dst in range (0,netSize):
+                node = src
+                path = [node]
+                while (R[node][dst] != -1):
+                    out_port = R[node][dst];
+                    next_node = node_port_dst[node][out_port]
+                    path.append(next_node)
+                    node = next_node
+                MatrixPath[src][dst] = path
+        return (MatrixPath)
+    
+    def _create_routing_matrix_from_src_routing_dir(self, G, src_routing_dir):
+        """
+
+        Parameters
+        ----------
+        G : graph
+            Graph representing the network.
+        src_routing_dir : str
+            Directory where we found the routing filesFile. One for each src node. 
 
         Returns
         -------
@@ -570,12 +680,47 @@ class DatanetAPI:
 
         """
         
-        MatrixPath = numpy.empty((net_size, net_size), dtype=object)
-        with open (routing_file) as fd:
-            for line in fd:
-                nodes = line.split(";")
-                nodes = list(map(int, nodes))
-                MatrixPath[nodes[0],nodes[-1]] = nodes
+        netSize = G.number_of_nodes()
+        node_port_dst = self._getRoutingSrcPortDst(G)
+        src_R = []
+        for i in range(netSize):
+            routing_file = os.path.join(src_routing_dir,"Routing_src_"+str(i)+".txt")
+            src_R.append(self._readRoutingFile(routing_file, netSize))
+        MatrixPath = numpy.empty((netSize, netSize), dtype=object)
+        for src in range (0,netSize):
+            R = src_R[src]
+            for dst in range (0,netSize):
+                node = src
+                path = [node]
+                while (R[node][dst] != -1):
+                    out_port = R[node][dst];
+                    next_node = node_port_dst[node][out_port]
+                    path.append(next_node)
+                    node = next_node
+                MatrixPath[src][dst] = path
+        return (MatrixPath)
+
+    def _create_routing_matrix(self, G,routing_file):
+        """
+
+        Parameters
+        ----------
+        G : graph
+            Graph representing the network.
+        routing_file : str
+            File where the information about routing is located.
+
+        Returns
+        -------
+        MatrixPath : NxN Matrix
+            Matrix where each cell [i,j] contains the path to go from node
+            i to node j.
+
+        """
+        if (os.path.isfile(routing_file)):
+            MatrixPath = self._create_routing_matrix_from_dst_routing_file(G,routing_file)
+        elif(os.path.isdir(routing_file)):
+            MatrixPath = self._create_routing_matrix_from_src_routing_dir(G,routing_file)
         
         return (MatrixPath)
 
@@ -714,7 +859,7 @@ class DatanetAPI:
                     if (s._routing_file in self._routings_dic):
                         routing_matrix = self._routings_dic[s._routing_file]
                     else:
-                        routing_matrix = self._create_routing_matrix(s._routing_file,len(g))
+                        routing_matrix = self._create_routing_matrix(g,s._routing_file)
                         self._routings_dic[s._routing_file] = routing_matrix
                     
                     s._set_routing_matrix(routing_matrix)
@@ -727,8 +872,9 @@ class DatanetAPI:
             except (GeneratorExit,SystemExit) as e:
                 raise
             except:
-                #traceback.print_exc()
+                traceback.print_exc()
                 print ("Error in the file: %s   iteration: %d" % (file,it))
+                exit(1)
                     
             ctr += 1
             #print("Progress check: %d/%d" % (ctr,len(tuple_files)))
@@ -797,7 +943,6 @@ class DatanetAPI:
                     dict_traffic = {}
                     q_values_for_flow = q_flows.get()
                     tmp_traffic_flow = flow.split(',')
-                    tmp_traffic_flow = list(map(float, tmp_traffic_flow))
                     offset = self._timedistparams(tmp_traffic_flow,dict_traffic)
                     if offset != -1:
                         self._sizedistparams(tmp_traffic_flow, offset, dict_traffic)
@@ -805,7 +950,7 @@ class DatanetAPI:
                         dict_traffic['AvgBw'] = q_values_for_flow[0]*1000
                         dict_traffic['PktsGen'] = q_values_for_flow[1]
                         dict_traffic['TotalPktsGen'] = sim_time * dict_traffic['PktsGen']
-                        dict_traffic['ToS'] = tmp_traffic_flow[-1]
+                        dict_traffic['ToS'] = int(tmp_traffic_flow[-1])
                     if (len(dict_traffic.keys())!=0):
                         lst_traffic_flows.append (dict_traffic)
                 
@@ -842,59 +987,81 @@ class DatanetAPI:
 
         """
         
-        if data[0] == 0: 
+        if data[0] == "0": 
             dict_traffic['TimeDist'] = TimeDist.EXPONENTIAL_T
             params = {}
-            params['EqLambda'] = data[1]
-            params['AvgPktsLambda'] = data[2]
-            params['ExpMaxFactor'] = data[3]
+            params['EqLambda'] = float(data[1])
+            params['AvgPktsLambda'] = float(data[2])
+            params['ExpMaxFactor'] = float(data[3])
             dict_traffic['TimeDistParams'] = params
             return 4
-        elif data[0] == 1:
+        elif data[0] == "1":
             dict_traffic['TimeDist'] = TimeDist.DETERMINISTIC_T
             params = {}
-            params['EqLambda'] = data[1]
-            params['AvgPktsLambda'] = data[2]
+            params['EqLambda'] = float(data[1])
+            params['AvgPktsLambda'] = float(data[2])
             dict_traffic['TimeDistParams'] = params
             return 3
-        elif data[0] == 2:
+        elif data[0] == "2":
             dict_traffic['TimeDist'] = TimeDist.UNIFORM_T
             params = {}
-            params['EqLambda'] = data[1]
-            params['MinPktLambda'] = data[2]
-            params['MaxPktLambda'] = data[3]
+            params['EqLambda'] = float(data[1])
+            params['MinPktLambda'] = float(data[2])
+            params['MaxPktLambda'] = float(data[3])
             dict_traffic['TimeDistParams'] = params
             return 4
-        elif data[0] == 3:
+        elif data[0] == "3":
             dict_traffic['TimeDist'] = TimeDist.NORMAL_T
             params = {}
-            params['EqLambda'] = data[1]
-            params['AvgPktsLambda'] = data[2]
-            params['StdDev'] = data[3]
+            params['EqLambda'] = float(data[1])
+            params['AvgPktsLambda'] = float(data[2])
+            params['StdDev'] = float(data[3])
             dict_traffic['TimeDistParams'] = params
             return 4
-        elif data[0] == 4:
+        elif data[0] == "4":
             dict_traffic['TimeDist'] = TimeDist.ONOFF_T
             params = {}
-            params['EqLambda'] = data[1]
-            params['PktsLambdaOn'] = data[2]
-            params['AvgTOff'] = data[3]
-            params['AvgTOn'] = data[4]
-            params['ExpMaxFactor'] = data[5]
+            params['EqLambda'] = float(data[1])
+            params['PktsLambdaOn'] = float(data[2])
+            params['AvgTOff'] = float(data[3])
+            params['AvgTOn'] = float(data[4])
+            params['ExpMaxFactor'] = float(data[5])
             dict_traffic['TimeDistParams'] = params
             return 6
-        elif data[0] == 5:
+        elif data[0] == "5":
             dict_traffic['TimeDist'] = TimeDist.PPBP_T
             params = {}
-            params['EqLambda'] = data[1]
-            params['BurstGenLambda'] = data[2]
-            params['Bitrate'] = data[3]
-            params['ParetoMinSize'] = data[4]
-            params['ParetoMaxSize'] = data[5]
-            params['ParetoAlfa'] = data[6]
-            params['ExpMaxFactor'] = data[7]
+            params['EqLambda'] = float(data[1])
+            params['BurstGenLambda'] = float(data[2])
+            params['Bitrate'] = float(data[3])
+            params['ParetoMinSize'] = float(data[4])
+            params['ParetoMaxSize'] = float(data[5])
+            params['ParetoAlfa'] = float(data[6])
+            params['ExpMaxFactor'] = float(data[7])
             dict_traffic['TimeDistParams'] = params
             return 8
+        elif data[0] == "6":
+            dict_traffic['TimeDist'] = TimeDist.TRACE_T
+            params = {}
+            params['EqLambda'] = float(data[1])
+            dict_traffic['TimeDistParams'] = params
+            return 2
+        elif data[0] == "7":
+            dict_traffic['TimeDist'] = TimeDist.EXTERNAL_PY_T
+            try:
+                params_list = self._external_param_dic[data[2]]
+            except:
+                print ("Error: No external file descriptor for "+data[2])
+                return -1
+            params = {}
+            params['EqLambda'] = float(data[1])
+            params['Distribution'] = params_list[0]
+            pos = 3 # 0 is EqLambda and 1 is name of the used module
+            for pname in params_list[1:]:
+                params[pname] = float(data[pos])
+                pos += 1
+            dict_traffic['TimeDistParams'] = params
+            return pos
         else: return -1
     
     def _sizedistparams(self, data, starting_point, dict_traffic):
@@ -919,33 +1086,41 @@ class DatanetAPI:
 
         """
         
-        if data[starting_point] == 0:
+        if data[starting_point] == "0":
             dict_traffic['SizeDist'] = SizeDist.DETERMINISTIC_S
             params = {}
-            params['AvgPktSize'] = data[starting_point+1]
+            params['AvgPktSize'] = float(data[starting_point+1])
             dict_traffic['SizeDistParams'] = params
-        elif data[starting_point] == 1:
+        elif data[starting_point] == "1":
             dict_traffic['SizeDist'] = SizeDist.UNIFORM_S
             params = {}
-            params['AvgPktSize'] = data[starting_point+1]
-            params['MinSize'] = data[starting_point+2]
-            params['MaxSize'] = data[starting_point+3]
+            params['AvgPktSize'] = float(data[starting_point+1])
+            params['MinSize'] = float(data[starting_point+2])
+            params['MaxSize'] = float(data[starting_point+3])
             dict_traffic['SizeDistParams'] = params
-        elif data[starting_point] == 2:
+        elif data[starting_point] == "2":
             dict_traffic['SizeDist'] = SizeDist.BINOMIAL_S
             params = {}
-            params['AvgPktSize'] = data[starting_point+1]
-            params['PktSize1'] = data[starting_point+2]
-            params['PktSize2'] = data[starting_point+3]
+            params['AvgPktSize'] = float(data[starting_point+1])
+            params['PktSize1'] = float(data[starting_point+2])
+            params['PktSize2'] = float(data[starting_point+3])
             dict_traffic['SizeDistParams'] = params
-        elif data[starting_point] == 3:
+        elif data[starting_point] == "3":
             dict_traffic['SizeDist'] = SizeDist.GENERIC_S
             params = {}
-            params['AvgPktSize'] = data[starting_point+1]
-            params['NumCandidates'] = data[starting_point+2]
+            params['AvgPktSize'] = float(data[starting_point+1])
+            params['NumCandidates'] = float(data[starting_point+2])
             for i in range(0, int(data[starting_point+2]) * 2, 2):
-                params["Size_%d"%(i/2)] = data[starting_point+3+i]
-                params["Prob_%d"%(i/2)] = data[starting_point+4+i]
+                params["Size_%d"%(i/2)] = float(data[starting_point+3+i])
+                params["Prob_%d"%(i/2)] = float(data[starting_point+4+i])
+            dict_traffic['SizeDistParams'] = params
+        elif data[starting_point] == 4:
+            dict_traffic['SizeDist'] = SizeDist.TRACE_S
+            params = {}
+            try:
+                params['AvgPktSize'] = round(dict_traffic['AvgBw']/dict_traffic['PktsGen'],6)
+            except:
+                params['AvgPktSize'] = 0
             dict_traffic['SizeDistParams'] = params
         else:
             return -1
@@ -970,23 +1145,28 @@ class DatanetAPI:
         l = s._link_usage_line.split(";")
         netSize = s.get_network_size()
         for i in range(netSize):
+            if ("queueSizes" in s.topology_object.nodes[i]):
+                OccupancyUnit = "num_pkts"
+            else:
+                OccupancyUnit = "num_bits"
             port_stat.append({})
             for j in range(netSize):
-                params = l[i*netSize+j].split(",")
+                params_lst = l[i*netSize+j].split(":")
+                params = params_lst[0].split(",")
                 if (params[0] == "-1"):
                     continue
                 link_stat = {}
                 link_stat["utilization"] = float(params[0])
                 link_stat["losses"] = float(params[1])
                 link_stat["avgPacketSize"] = float(params[2])
-                num_qos_queues = int((len(params)-3)/5)
                 qos_queue_stat_lst = []
-                for q in range(num_qos_queues):
-                    qos_queue_stat = {"utilization":float(params[3+q*5]),
-                                  "losses":float(params[3+q*5+1]),
-                                  "avgPortOccupancy":float(params[3+q*5+2]),
-                                  "maxQueueOccupancy":float(params[3+q*5+3]),
-                                  "avgPacketSize":float(params[3+q*5+4])}
+                for params in params_lst[1:]:
+                    queue_params = params.split(",")
+                    qos_queue_stat = {"utilization":float(queue_params[0]),
+                                  "losses":float(queue_params[1]),
+                                  "avgPortOccupancy":{OccupancyUnit:float(queue_params[2])},
+                                  "maxQueueOccupancy":{OccupancyUnit:float(queue_params[3])},
+                                  "avgPacketSize":float(queue_params[4])}
                     qos_queue_stat_lst.append(qos_queue_stat)
                 link_stat["qosQueuesStats"] = qos_queue_stat_lst;
                 port_stat[i][j] = link_stat
