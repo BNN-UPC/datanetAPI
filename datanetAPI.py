@@ -872,9 +872,9 @@ class DatanetAPI:
             except (GeneratorExit,SystemExit) as e:
                 raise
             except:
-                traceback.print_exc()
+                #traceback.print_exc()
                 print ("Error in the file: %s   iteration: %d" % (file,it))
-                exit(1)
+                #exit(1)
                     
             ctr += 1
             #print("Progress check: %d/%d" % (ctr,len(tuple_files)))
