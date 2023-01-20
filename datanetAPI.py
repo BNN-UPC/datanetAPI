@@ -945,12 +945,12 @@ class DatanetAPI:
                     tmp_traffic_flow = flow.split(',')
                     offset = self._timedistparams(tmp_traffic_flow,dict_traffic)
                     if offset != -1:
-                        self._sizedistparams(tmp_traffic_flow, offset, dict_traffic)
                         # From kbps to bps
                         dict_traffic['AvgBw'] = q_values_for_flow[0]*1000
                         dict_traffic['PktsGen'] = q_values_for_flow[1]
                         dict_traffic['TotalPktsGen'] = sim_time * dict_traffic['PktsGen']
                         dict_traffic['ToS'] = int(tmp_traffic_flow[-1])
+                        self._sizedistparams(tmp_traffic_flow, offset, dict_traffic)
                     if (len(dict_traffic.keys())!=0):
                         lst_traffic_flows.append (dict_traffic)
                 
@@ -1114,7 +1114,7 @@ class DatanetAPI:
                 params["Size_%d"%(i/2)] = float(data[starting_point+3+i])
                 params["Prob_%d"%(i/2)] = float(data[starting_point+4+i])
             dict_traffic['SizeDistParams'] = params
-        elif data[starting_point] == 4:
+        elif data[starting_point] == "4":
             dict_traffic['SizeDist'] = SizeDist.TRACE_S
             params = {}
             try:
