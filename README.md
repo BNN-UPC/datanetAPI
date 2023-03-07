@@ -144,11 +144,11 @@ In the case of traffic_matrix, using information at the flow-level is recommende
     * 'losses': Average packets lost in the outgoing QoS queue (in the range [0, 1]).
     * 'avgPacketSize': Average packet size from all outgoing packets going through the QoS queue (bits).
     * 'avgPortOccupancy': Dictionary with the occupancy (service and waiting queue) of the QoS queue.
-        * 'num_pkts': avgPortOccupancy in packets. It is onlt defined if the queue size of the node is defined  in packets (‘queueSizes’)
-        * 'num_bits': avgPortOccupancy in bits. It is onlt defined if the queue size of the node is defined  in bits (‘bufferSizes‘)
+        * 'num_pkts': avgPortOccupancy in packets. It is only defined if the queue size of the node is defined  in packets (‘queueSizes’)
+        * 'num_bits': avgPortOccupancy in bits. It is only defined if the queue size of the node is defined  in bits (‘bufferSizes‘)
     * 'maxQueueOccupancy': Dictionary with the maximum occupancy seen on the QoS queue.
-        * 'num_pkts': maxQueueOccupancy in packets. It is onlt defined if the queue size of the node is defined  in packets (‘queueSizes’)
-        * 'num_bits': maxQueueOccupancy in bits. It is onlt defined if the queue size of the node is defined  in bits (‘bufferSizes‘)
+        * 'num_pkts': maxQueueOccupancy in packets. It is only defined if the queue size of the node is defined  in packets (‘queueSizes’)
+        * 'num_bits': maxQueueOccupancy in bits. It is only defined if the queue size of the node is defined  in bits (‘bufferSizes‘)
 
 Thus, assuming p_stats is the port stats object of a sample, we may access the information as follows:
 * p_stats[src][dst]: dictionary with the performance measurements of the port [src][dst]. If the dst node is not adjacent to src node. A KeyError exception will be produced.

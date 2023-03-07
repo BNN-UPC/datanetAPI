@@ -628,6 +628,35 @@ class DatanetAPI:
                 node_port_dst[node][port] = destination
         return(node_port_dst)
     
+
+    def _create_routing_matrix_from_path_list_file(self, G, routing_file):
+        """
+        
+        Parameters
+        ----------
+        G : graph
+            Graph representing the network.
+        routing_file : str
+            File where the information about routing is located. The file is a 
+            destination routing file.
+
+        Returns
+        -------
+        MatrixPath : NxN Matrix
+            Matrix where each cell [i,j] contains the path to go from node
+            i to node j.
+
+        """
+        netSize = G.number_of_nodes()
+        MatrixPath = numpy.empty((netSize, netSize), dtype=object)
+        with open (routing_file) as fd:
+            for line in fd:
+                path = list(map(int,line.split(";")))
+                MatrixPath[path[0],path[-1]] = path
+
+        return(MatrixPath)
+
+
     def _create_routing_matrix_from_dst_routing_file(self, G, routing_file):
         """
 
@@ -718,7 +747,14 @@ class DatanetAPI:
 
         """
         if (os.path.isfile(routing_file)):
-            MatrixPath = self._create_routing_matrix_from_dst_routing_file(G,routing_file)
+            with open(routing_file) as rf_fd:
+                line = rf_fd.readline()
+                # The routing file specifies a list of paths
+                if (";" in line):
+                    MatrixPath = self._create_routing_matrix_from_path_list_file(G,routing_file)
+                # The routing file specifies a matrix of out ports
+                else:    
+                    MatrixPath = self._create_routing_matrix_from_dst_routing_file(G,routing_file)
         elif(os.path.isdir(routing_file)):
             MatrixPath = self._create_routing_matrix_from_src_routing_dir(G,routing_file)
         
