@@ -403,7 +403,7 @@ class Sample:
         and delay. If the packet has been droped, the tuple has two elements (timestamp and pkt size).
 
         """
-        if (not self.pkts_info):
+        if (self.pkts_info is None):
             if (not os.path.isfile(self.pkts_info_file)):
                 raise DatanetException("ERROR: Sample {} doesn't have pkts_info object.".format(self._sample_id))
             self.pkts_info = pickle.load(open(self.pkts_info_file,"rb"))
@@ -427,7 +427,7 @@ class Sample:
         Return information of the packets transmitted in the src-dst path. 
 
         """
-        if (not self.pkts_info):
+        if (self.pkts_info is None):
             if (not os.path.isfile(self.pkts_info_file)):
                 raise DatanetException("ERROR: Sample {} doesn't have pkts_info object.".format(self._sample_id))
             self.pkts_info = pickle.load(open(self.pkts_info_file,"rb"))
