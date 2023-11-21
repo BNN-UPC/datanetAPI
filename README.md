@@ -143,7 +143,7 @@ In the case of traffic_matrix, using information at the flow-level is recommende
     * 'utilization': Average utilization of the outgoing port corresponding to the traffic associate with the QoS queue (in the range [0, 1])
     * 'losses': Average packets lost in the outgoing QoS queue (in the range [0, 1]).
     * 'avgPacketSize': Average packet size from all outgoing packets going through the QoS queue (bits).
-    * 'avgPortOccupancy': Average port occupancy (service and waiting queue) of the QoS queue (packets).
+    * 'avgPortOccupancy': Average port occupancy is  the average occupancy of an equivalent queue that would produce the same average delay (queuing and service delay) as experienced by packets going through the QoS queue.(packets).
     * 'maxQueueOccupancy': Maximum occupancy seen on the QoS queue.
 
 Thus, assuming p_stats is the port stats object of a sample, we may access the information as follows:
