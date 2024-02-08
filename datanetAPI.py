@@ -76,6 +76,7 @@ class SizeDist(IntEnum):
     BINOMIAL_S = 2
     GENERIC_S = 3
     TRACE_S = 4
+    EXTERNAL_PY_S = 5
     
     @staticmethod
     def getStrig(sizeDist):
@@ -89,6 +90,8 @@ class SizeDist(IntEnum):
             return ("GENERIC_S")
         elif (sizeDist ==4):
             return ("TRACE_S")
+        elif (sizeDist ==5):
+            return ("EXTERNAL_PY_S")
         else:
             return ("UNKNOWN")
 
@@ -130,26 +133,42 @@ class Sample:
     
     """
     
-    global_packets = None
-    global_losses = None
-    global_delay = None
-    maxAvgLambda = None
+    def __init__(self):
+        self.global_packets = None
+        self.global_losses = None
+        self.global_delay = None
+        self.maxAvgLambda = None
     
-    performance_matrix = None
-    traffic_matrix = None
-    routing_matrix = None
-    topology_object = None
-    port_stats = None
+        self.performance_matrix = None
+        self.traffic_matrix = None
+        self.routing_matrix = None
+        self.topology_object = None
+        self.port_stats = None
     
-    data_set_file = None
-    _results_line = None
-    _traffic_line = None
-    _input_files_line = None
-    _status_line = None
-    _flowresults_line = None
-    _link_usage_line = None
-    _routing_file = None
-    _graph_file = None
+        self.sample_id = -1
+        self.data_set_file = None
+        self._results_line = None
+        self._traffic_line = None
+        self._input_files_line = None
+        self._status_line = None
+        self._flowresults_line = None
+        self._link_usage_line = None
+        self._routing_file = None
+        self._graph_file = None
+    
+    def get_sample_id(self):
+        """
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        A tuple with the file and id containing this sample. 
+
+        """
+            
+        return (self.data_set_file, self.sample_id)
     
     def get_global_packets(self):
         """
@@ -864,9 +883,7 @@ class DatanetAPI:
                         s._link_usage_line = link_usage_file.readline().decode()[:-1]
                     if (len(s._results_line) == 0) or (len(s._traffic_line) == 0):
                         break
-                    if (not ";OK;" in s._status_line):
-                        print ("Removed iteration: "+s._status_line)
-                        continue;
+
                     
                     # Filter traffic intensity
                     if (len(self.intensity_values) != 0):
@@ -876,6 +893,7 @@ class DatanetAPI:
                             continue
                     
                     used_files = s._input_files_line.split(';')
+                    s.sample_id = int(used_files[0])
                     s._graph_file = os.path.join(root,"graphs",used_files[1])
                     s._routing_file = os.path.join(root,"routings",used_files[2])
                     if (s._graph_file in self._graphs_dic):
@@ -883,6 +901,10 @@ class DatanetAPI:
                     else:
                         g = networkx.read_gml(s._graph_file, destringizer=int)
                         self._graphs_dic[s._graph_file] = g
+                    
+                    if (not ";OK;" in s._status_line):
+                        print ("Removed iteration {}: {}".format(s.sample_id,s._status_line))
+                        continue;
                     
                     # Filter topology size
                     if (len(self.topology_sizes) != 0 and not len(g) in self.topology_sizes):
@@ -900,7 +922,12 @@ class DatanetAPI:
                     
                     s._set_routing_matrix(routing_matrix)
                     s._set_topology_object(g)
-                    self._process_flow_results(s)
+                    try:
+                        self._process_flow_results(s)
+                    except DatanetException as e:
+                        print ("Removed iteration {}: {}".format(s.sample_id,e))
+                        continue
+                        
                     if (s._link_usage_line):
                         self._process_link_usage(s)
                     it +=1
@@ -1087,8 +1114,7 @@ class DatanetAPI:
             try:
                 params_list = self._external_param_dic[data[2]]
             except:
-                print ("Error: No external file descriptor for "+data[2])
-                return -1
+               raise DatanetException("Unknown external python descriptor for {}. Supported modules are: {}".format(data[2],list(self._external_param_dic.keys())))
             params = {}
             params['EqLambda'] = float(data[1])
             params['Distribution'] = params_list[0]
@@ -1098,7 +1124,10 @@ class DatanetAPI:
                 pos += 1
             dict_traffic['TimeDistParams'] = params
             return pos
-        else: return -1
+        elif data[0] == "-1":
+            return -1
+        else:
+            raise DatanetException("Unknown time_distribution ({})".format(data[0]))
     
     def _sizedistparams(self, data, starting_point, dict_traffic):
         """
@@ -1158,8 +1187,23 @@ class DatanetAPI:
             except:
                 params['AvgPktSize'] = 0
             dict_traffic['SizeDistParams'] = params
+        elif data[starting_point] == "5":
+            dict_traffic['SizeDist'] = SizeDist.EXTERNAL_PY_S
+            try:
+                params_list = self._external_param_dic[data[starting_point+2]]
+            except:
+                raise DatanetException("Unknown external python descriptor for {}. Supported modules are: {}".format(data[starting_point+2],list(self._external_param_dic.keys())))
+            params = {}
+            params['AvgPktSize'] = float(data[starting_point+1])
+            params['Distribution'] = params_list[0]
+            pos = 3 # 0 is AvgPktSize and 1 is name of the used module
+            for pname in params_list[1:]:
+                params[pname] = float(data[starting_point+pos])
+                pos += 1
+
+            dict_traffic['SizeDistParams'] = params
         else:
-            return -1
+            raise DatanetException("Unknown size_distribution ({})".format(data[0]))
         return 0
 
     def _process_link_usage(self,s):

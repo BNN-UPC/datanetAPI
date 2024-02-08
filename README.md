@@ -213,3 +213,4 @@ The API includes methods to obtain more easily some information from a sample ob
 * s.get_link_properties(src,dst): Returns a dictionary with the parameters of the link between node src and node dst if they are connected by a link. Otherwise it returns ‘None’.
 * s.get_port_stats(): Returns the port_stats object. Assuming this object is denoted by ps,  the information that port_stats stores for a specific src-dst port can be accessed using ps[src][dst] . See more details about the port_stats in the previous section.
 * s.get_srcdst_port_stats(src,dst): Directly returns a dictionary with the statistics associated with the outgoing port of the src node to dst node. See more details about the returned statistics in the port_stats section.
+* s.get_sample_id(): Returns a tuple with the file and id containing this sample. 
