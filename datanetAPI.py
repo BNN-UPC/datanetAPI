@@ -1203,7 +1203,7 @@ class DatanetAPI:
 
             dict_traffic['SizeDistParams'] = params
         else:
-            raise DatanetException("Unknown size_distribution ({})".format(data[0]))
+            raise DatanetException("Unknown size_distribution ({})".format(data[starting_point]))
         return 0
 
     def _process_link_usage(self,s):
